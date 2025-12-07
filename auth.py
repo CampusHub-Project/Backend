@@ -3,6 +3,7 @@ from sanic.response import json
 from database import execute_query, fetch_one
 from security import hash_password
 from security import hash_password, check_password, create_access_token
+from security import authorized
 
 auth_bp = Blueprint("auth", url_prefix="/auth")
 
@@ -74,3 +75,15 @@ async def login(request):
             "role": user["role"]
         }
     })
+
+@auth_bp.get("/me")
+@authorized()
+async def get_my_profile(request):
+    user_id = request.ctx.user_id
+    
+    user = await fetch_one(
+        "SELECT user_id, first_name, last_name, email, department, role FROM Users WHERE user_id = %s",
+        (user_id,)
+    )
+    
+    return json({"user": user})
