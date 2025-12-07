@@ -4,3 +4,4 @@ python-dotenv
 aiomysql
 cryptography
 flake8
+pyjwt

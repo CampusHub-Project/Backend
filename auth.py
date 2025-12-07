@@ -2,6 +2,7 @@ from sanic import Blueprint
 from sanic.response import json
 from database import execute_query, fetch_one
 from security import hash_password
+from security import hash_password, check_password, create_access_token
 
 auth_bp = Blueprint("auth", url_prefix="/auth")
 
@@ -44,3 +45,32 @@ async def register(request):
         
     except Exception as e:
         return json({"error": str(e)}, status=500)
+    
+@auth_bp.post("/login")
+async def login(request):
+    data = request.json
+    
+    if not data or "email" not in data or "password" not in data:
+        return json({"error": "Email ve şifre gereklidir."}, status=400)
+
+    user = await fetch_one(
+        "SELECT user_id, password, first_name, role FROM Users WHERE email = %s",
+        (data["email"],)
+    )
+
+    if not user:
+        return json({"error": "Kullanıcı bulunamadı."}, status=404)
+
+    if not check_password(data["password"], user["password"]):
+        return json({"error": "Hatalı şifre!"}, status=401)
+
+    token = create_access_token(user["user_id"])
+
+    return json({
+        "message": "Giriş başarılı!",
+        "token": token,
+        "user": {
+            "first_name": user["first_name"],
+            "role": user["role"]
+        }
+    })
