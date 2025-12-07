@@ -21,6 +21,7 @@ async def close_db(app, loop):
     if pool:
         pool.close()
         await pool.wait_closed()
+        pool = None
 
 async def execute_query(query, args=()):
     async with pool.acquire() as conn:
