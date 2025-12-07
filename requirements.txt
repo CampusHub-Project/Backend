@@ -1,0 +1,6 @@
+sanic
+sanic-ext
+python-dotenv
+aiomysql
+cryptography
+flake8
