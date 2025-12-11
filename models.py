@@ -33,19 +33,16 @@ class Clubs(BaseModel):
     logo_url = fields.CharField(max_length=255, null=True)
     status = fields.CharField(max_length=20, default="pending")
     
-    # İlişkiler
     president = fields.ForeignKeyField('models.Users', related_name='led_clubs', on_delete=fields.SET_NULL, null=True)
     created_by = fields.ForeignKeyField('models.Users', related_name='created_clubs', on_delete=fields.SET_NULL, null=True)
 
     class Meta:
         table = "clubs"
 
-# --- 3. Etkinlikler (YENİ EKLENEN KISIM) ---
+# --- 3. Etkinlikler ---
 class Events(BaseModel):
     event_id = fields.IntField(pk=True)
-    # Hangi kulüp düzenliyor?
     club = fields.ForeignKeyField('models.Clubs', related_name='events')
-    
     title = fields.CharField(max_length=150)
     description = fields.TextField(null=True)
     image_url = fields.CharField(max_length=255, null=True)
@@ -53,18 +50,17 @@ class Events(BaseModel):
     end_time = fields.DatetimeField(null=True)
     location = fields.CharField(max_length=255, null=True)
     quota = fields.IntField(default=0)
-    
     created_by = fields.ForeignKeyField('models.Users', related_name='created_events', on_delete=fields.SET_NULL, null=True)
 
     class Meta:
         table = "events"
 
-# --- 4. Etkinlik Katılımcıları (YENİ) ---
+# --- 4. Katılımcılar ---
 class EventParticipants(models.Model):
     participant_id = fields.IntField(pk=True)
     event = fields.ForeignKeyField('models.Events', related_name='participants')
     user = fields.ForeignKeyField('models.Users', related_name='participated_events')
-    status = fields.CharField(max_length=20, default="going") # going, interested, not_going
+    status = fields.CharField(max_length=20, default="going")
     joined_at = fields.DatetimeField(auto_now_add=True)
     is_active = fields.BooleanField(default=True)
 
@@ -72,7 +68,17 @@ class EventParticipants(models.Model):
         table = "event_participants"
         unique_together = (("event", "user"),)
 
-# --- 5. Bildirimler (YENİ) ---
+# --- 5. Yorumlar (BU EKSİKTİ!) ---
+class EventComments(BaseModel):
+    comment_id = fields.IntField(pk=True)
+    event = fields.ForeignKeyField('models.Events', related_name='comments')
+    user = fields.ForeignKeyField('models.Users', related_name='comments')
+    comment = fields.TextField()
+
+    class Meta:
+        table = "event_comments"
+
+# --- 6. Bildirimler ---
 class Notifications(models.Model):
     notification_id = fields.IntField(pk=True)
     user = fields.ForeignKeyField('models.Users', related_name='notifications')

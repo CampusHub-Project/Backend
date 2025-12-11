@@ -9,6 +9,8 @@ from auth import auth_bp
 from clubs import clubs_bp
 from events import events_bp
 from participants import participants_bp
+from comments import comments_bp
+from notifications import notifications_bp
 load_dotenv()
 
 app = Sanic("CampusHub")
@@ -18,6 +20,8 @@ app.blueprint(auth_bp)
 app.blueprint(clubs_bp)
 app.blueprint(events_bp)
 app.blueprint(participants_bp)
+app.blueprint(comments_bp)
+app.blueprint(notifications_bp)
 
 @app.route("/")
 async def test(request):

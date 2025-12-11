@@ -1,6 +1,6 @@
 from sanic import Blueprint
 from sanic.response import json
-from models import EventParticipants, Events
+from models import EventParticipants, Events, Notifications
 from security import authorized
 from tortoise.exceptions import IntegrityError
 
@@ -31,8 +31,21 @@ async def join_event(request):
             user_id=user_id,
             status="going" # Varsayılan: Gidiyor
         )
-        return json({"message": "Etkinliğe katıldınız!"}, status=201)
 
+        # --- YENİ EKLENEN KISIM: OTOMATİK BİLDİRİM ---
+        # Etkinliği kim oluşturduysa ona haber verelim
+        # event değişkenini yukarıda çekmiştik (event.created_by_id)
+        if event.created_by_id:
+            await Notifications.create(
+                user_id=event.created_by_id, # Etkinlik sahibine gönder
+                event_id=event_id,
+                club_id=event.club_id,
+                message=f"Biri etkinliğinize katıldı! (Etkinlik: {event.title})"
+            )
+        # ---------------------------------------------
+
+        return json({"message": "Etkinliğe katıldınız!"}, status=201)
+    
     except IntegrityError:
         return json({"error": "Zaten bu etkinliğe katılımcısısınız."}, status=409)
     except Exception as e:
@@ -77,5 +90,5 @@ async def list_participants(request, event_id):
         if p["joined_at"]:
             # isoformat(), tarihi "2025-12-11T15:30:00" gibi standart bir metne çevirir
             p["joined_at"] = p["joined_at"].isoformat()
-            
+
     return json({"participants": participants, "count": len(participants)})
