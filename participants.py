@@ -17,32 +17,24 @@ async def join_event(request):
     
     event_id = data["event_id"]
 
-    # 1. Etkinlik var mı ve aktif mi?
     event = await Events.get_or_none(event_id=event_id, is_deleted=False)
     if not event:
         return json({"error": "Etkinlik bulunamadı."}, status=404)
 
-    # 2. Kontenjan kontrolü (İleride buraya eklenebilir)
-
-    # 3. Kayıt Ol
     try:
         await EventParticipants.create(
             event_id=event_id,
             user_id=user_id,
-            status="going" # Varsayılan: Gidiyor
+            status="going" 
         )
 
-        # --- YENİ EKLENEN KISIM: OTOMATİK BİLDİRİM ---
-        # Etkinliği kim oluşturduysa ona haber verelim
-        # event değişkenini yukarıda çekmiştik (event.created_by_id)
         if event.created_by_id:
             await Notifications.create(
-                user_id=event.created_by_id, # Etkinlik sahibine gönder
+                user_id=event.created_by_id, 
                 event_id=event_id,
                 club_id=event.club_id,
                 message=f"Biri etkinliğinize katıldı! (Etkinlik: {event.title})"
             )
-        # ---------------------------------------------
 
         return json({"message": "Etkinliğe katıldınız!"}, status=201)
     
@@ -60,8 +52,6 @@ async def leave_event(request):
     if not data or "event_id" not in data:
         return json({"error": "event_id gerekli"}, status=400)
 
-    # Kaydı silmek yerine 'is_active=False' veya direkt silebiliriz.
-    # Şimdilik direkt silelim (Katılımı iptal etme)
     deleted_count = await EventParticipants.filter(
         event_id=data["event_id"], 
         user_id=user_id
@@ -74,8 +64,6 @@ async def leave_event(request):
 
 @participants_bp.get("/<event_id:int>")
 async def list_participants(request, event_id):
-    # Bu etkinliğe katılanları listele
-    # İlişkili 'user' tablosundan isim ve soyismi çek
     participants = await EventParticipants.filter(
         event_id=event_id, 
         is_active=True
@@ -88,7 +76,6 @@ async def list_participants(request, event_id):
     )
     for p in participants:
         if p["joined_at"]:
-            # isoformat(), tarihi "2025-12-11T15:30:00" gibi standart bir metne çevirir
             p["joined_at"] = p["joined_at"].isoformat()
 
     return json({"participants": participants, "count": len(participants)})

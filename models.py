@@ -1,6 +1,5 @@
 from tortoise import fields, models
 
-# --- Ortak Miras Sınıfı ---
 class BaseModel(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
@@ -10,7 +9,6 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-# --- 1. Kullanıcılar ---
 class Users(BaseModel):
     user_id = fields.BigIntField(pk=True, generated=False) 
     first_name = fields.CharField(max_length=50)
@@ -25,7 +23,6 @@ class Users(BaseModel):
     class Meta:
         table = "users"
 
-# --- 2. Kulüpler ---
 class Clubs(BaseModel):
     club_id = fields.IntField(pk=True)
     club_name = fields.CharField(max_length=150, unique=True)
@@ -39,7 +36,6 @@ class Clubs(BaseModel):
     class Meta:
         table = "clubs"
 
-# --- 3. Etkinlikler ---
 class Events(BaseModel):
     event_id = fields.IntField(pk=True)
     club = fields.ForeignKeyField('models.Clubs', related_name='events')
@@ -55,7 +51,6 @@ class Events(BaseModel):
     class Meta:
         table = "events"
 
-# --- 4. Katılımcılar ---
 class EventParticipants(models.Model):
     participant_id = fields.IntField(pk=True)
     event = fields.ForeignKeyField('models.Events', related_name='participants')
@@ -68,7 +63,6 @@ class EventParticipants(models.Model):
         table = "event_participants"
         unique_together = (("event", "user"),)
 
-# --- 5. Yorumlar (BU EKSİKTİ!) ---
 class EventComments(BaseModel):
     comment_id = fields.IntField(pk=True)
     event = fields.ForeignKeyField('models.Events', related_name='comments')
@@ -78,7 +72,6 @@ class EventComments(BaseModel):
     class Meta:
         table = "event_comments"
 
-# --- 6. Bildirimler ---
 class Notifications(models.Model):
     notification_id = fields.IntField(pk=True)
     user = fields.ForeignKeyField('models.Users', related_name='notifications')

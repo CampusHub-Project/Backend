@@ -16,12 +16,11 @@ async def create_club(request):
         return json({"error": "Kulüp adı zorunludur."}, status=400)
 
     try:
-        # create_by_id ve president_id yazarak Foreign Key'e ID atıyoruz
         club = await Clubs.create(
             club_name=data["club_name"],
             description=data.get("description"),
             logo_url=data.get("logo_url"),
-            president_id=user_id,  # İlişkili alanlarda _id ekiyle ID verebilirsin
+            president_id=user_id, 
             created_by_id=user_id
         )
         return json({"message": "Kulüp oluşturuldu!", "club_id": club.club_id}, status=201)
@@ -33,10 +32,7 @@ async def create_club(request):
 
 @clubs_bp.get("/")
 async def list_clubs(request):
-    # SQL: SELECT * FROM clubs WHERE is_deleted = 0
-    # ORM: Clubs.filter(is_deleted=False)
-    
-    # .values() diyerek sadece istediğimiz alanları sözlük (dict) olarak alıyoruz
+
     clubs = await Clubs.filter(is_deleted=False).values(
         "club_id", "club_name", "description", "status", "logo_url"
     )

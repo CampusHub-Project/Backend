@@ -2,9 +2,8 @@ import os
 from sanic import Sanic
 from sanic.response import json
 from dotenv import load_dotenv
-from tortoise.contrib.sanic import register_tortoise # <-- YENİ
+from tortoise.contrib.sanic import register_tortoise 
 
-# Blueprintleri import et
 from auth import auth_bp
 from clubs import clubs_bp
 from events import events_bp
@@ -15,7 +14,6 @@ load_dotenv()
 
 app = Sanic("CampusHub")
 
-# Blueprintleri ekle
 app.blueprint(auth_bp)
 app.blueprint(clubs_bp)
 app.blueprint(events_bp)
@@ -32,8 +30,8 @@ DB_URL = f"mysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.g
 register_tortoise(
     app,
     db_url=DB_URL,
-    modules={"models": ["models"]}, # models.py dosyasını okumasını söylüyoruz
-    generate_schemas=True, # Tablolar yoksa OTOMATİK OLUŞTURUR (Development için harika)
+    modules={"models": ["models"]},
+    generate_schemas=True,
 )
 
 if __name__ == "__main__":
