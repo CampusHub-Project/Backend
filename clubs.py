@@ -1,7 +1,8 @@
 from sanic import Blueprint
 from sanic.response import json
-from database import execute_query, fetch_all
+from models import Clubs # <-- Model
 from security import authorized
+from tortoise.exceptions import IntegrityError
 
 clubs_bp = Blueprint("clubs", url_prefix="/clubs")
 
@@ -15,28 +16,29 @@ async def create_club(request):
         return json({"error": "Kulüp adı zorunludur."}, status=400)
 
     try:
-        club_id = await execute_query(
-            """
-            INSERT INTO Clubs (club_name, description, logo_url, president_id, created_by)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                data["club_name"],
-                data.get("description"),
-                data.get("logo_url"),
-                user_id, 
-                user_id
-            )
+        # create_by_id ve president_id yazarak Foreign Key'e ID atıyoruz
+        club = await Clubs.create(
+            club_name=data["club_name"],
+            description=data.get("description"),
+            logo_url=data.get("logo_url"),
+            president_id=user_id,  # İlişkili alanlarda _id ekiyle ID verebilirsin
+            created_by_id=user_id
         )
-        return json({"message": "Kulüp oluşturuldu!", "club_id": club_id}, status=201)
+        return json({"message": "Kulüp oluşturuldu!", "club_id": club.club_id}, status=201)
     
+    except IntegrityError:
+        return json({"error": "Bu isimde bir kulüp zaten var."}, status=400)
     except Exception as e:
-        return json({"error": f"Bir hata oluştu: {str(e)}"}, status=500)
+        return json({"error": str(e)}, status=500)
 
 @clubs_bp.get("/")
 async def list_clubs(request):
-    clubs = await fetch_all(
-        "SELECT club_id, club_name, description, status, logo_url FROM Clubs WHERE is_deleted = FALSE"
+    # SQL: SELECT * FROM clubs WHERE is_deleted = 0
+    # ORM: Clubs.filter(is_deleted=False)
+    
+    # .values() diyerek sadece istediğimiz alanları sözlük (dict) olarak alıyoruz
+    clubs = await Clubs.filter(is_deleted=False).values(
+        "club_id", "club_name", "description", "status", "logo_url"
     )
     
     return json({"clubs": clubs, "count": len(clubs)})

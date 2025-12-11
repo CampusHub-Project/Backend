@@ -1,7 +1,8 @@
 sanic
 sanic-ext
 python-dotenv
-aiomysql
 cryptography
 flake8
 pyjwt
+tortoise-orm
+aiomysql

@@ -1,9 +1,8 @@
 from sanic import Blueprint
 from sanic.response import json
-from database import execute_query, fetch_one
-from security import hash_password
-from security import hash_password, check_password, create_access_token
-from security import authorized
+from models import Users # <-- Modelleri çağırdık
+from security import hash_password, check_password, create_access_token, authorized
+from tortoise.exceptions import IntegrityError
 
 auth_bp = Blueprint("auth", url_prefix="/auth")
 
@@ -11,68 +10,53 @@ auth_bp = Blueprint("auth", url_prefix="/auth")
 async def register(request):
     data = request.json
     
-    required_fields = ["user_id", "first_name", "last_name", "email", "password", "department", "gender"]
-    for field in required_fields:
-        if field not in data:
-            return json({"error": f"Eksik bilgi: {field}"}, status=400)
-
-    existing_user = await fetch_one(
-        "SELECT user_id FROM Users WHERE email = %s OR user_id = %s", 
-        (data["email"], data["user_id"])
-    )
-    
-    if existing_user:
-        return json({"error": "Bu kullanıcı zaten kayıtlı (Email veya ID kullanımda)."}, status=409)
-
-    hashed_pw = hash_password(data["password"])
+    # Zorunlu alan kontrolü (Kısa yol)
+    required = ["user_id", "first_name", "last_name", "email", "password", "department", "gender"]
+    if not all(k in data for k in required):
+        return json({"error": "Eksik bilgi gönderildi."}, status=400)
 
     try:
-        await execute_query(
-            """
-            INSERT INTO Users (user_id, first_name, last_name, email, password, department, gender)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                data["user_id"],
-                data["first_name"],
-                data["last_name"],
-                data["email"],
-                hashed_pw,
-                data["department"],
-                data["gender"]
-            )
+        # SQL yerine CREATE metodu!
+        user = await Users.create(
+            user_id=data["user_id"],
+            first_name=data["first_name"],
+            last_name=data["last_name"],
+            email=data["email"],
+            password=hash_password(data["password"]),
+            department=data["department"],
+            gender=data["gender"]
         )
-        return json({"message": "Kayıt başarılı!", "user_id": data["user_id"]}, status=201)
-        
+        return json({"message": "Kayıt başarılı!", "user_id": user.user_id}, status=201)
+
+    except IntegrityError:
+        # Email veya ID çakışması olursa Tortoise bu hatayı verir
+        return json({"error": "Bu kullanıcı zaten kayıtlı (ID veya Email kullanımda)."}, status=409)
     except Exception as e:
         return json({"error": str(e)}, status=500)
-    
+
 @auth_bp.post("/login")
 async def login(request):
     data = request.json
-    
     if not data or "email" not in data or "password" not in data:
         return json({"error": "Email ve şifre gereklidir."}, status=400)
 
-    user = await fetch_one(
-        "SELECT user_id, password, first_name, role FROM Users WHERE email = %s",
-        (data["email"],)
-    )
+    # SQL yerine GET_OR_NONE metodu!
+    user = await Users.get_or_none(email=data["email"])
 
     if not user:
         return json({"error": "Kullanıcı bulunamadı."}, status=404)
 
-    if not check_password(data["password"], user["password"]):
+    if not check_password(data["password"], user.password):
         return json({"error": "Hatalı şifre!"}, status=401)
 
-    token = create_access_token(user["user_id"])
+    token = create_access_token(user.user_id)
 
     return json({
         "message": "Giriş başarılı!",
         "token": token,
         "user": {
-            "first_name": user["first_name"],
-            "role": user["role"]
+            "first_name": user.first_name,
+            "role": user.role
         }
     })
 
@@ -81,9 +65,16 @@ async def login(request):
 async def get_my_profile(request):
     user_id = request.ctx.user_id
     
-    user = await fetch_one(
-        "SELECT user_id, first_name, last_name, email, department, role FROM Users WHERE user_id = %s",
-        (user_id,)
-    )
+    # SQL yerine GET metodu
+    user = await Users.get(user_id=user_id)
     
-    return json({"user": user})
+    # Kullanıcı nesnesini sözlüğe çevirip gönderiyoruz
+    return json({
+        "user": {
+            "user_id": user.user_id,
+            "first_name": user.first_name,
+            "email": user.email,
+            "role": user.role,
+            "department": user.department
+        }
+    })
