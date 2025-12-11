@@ -7,7 +7,7 @@ from tortoise.contrib.sanic import register_tortoise # <-- YENİ
 # Blueprintleri import et
 from auth import auth_bp
 from clubs import clubs_bp
-
+from events import events_bp
 load_dotenv()
 
 app = Sanic("CampusHub")
@@ -15,6 +15,7 @@ app = Sanic("CampusHub")
 # Blueprintleri ekle
 app.blueprint(auth_bp)
 app.blueprint(clubs_bp)
+app.blueprint(events_bp)
 
 @app.route("/")
 async def test(request):
