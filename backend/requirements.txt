@@ -1,0 +1,11 @@
+sanic
+sanic-ext
+tortoise-orm
+aiomysql
+cryptography
+aioredis
+bcrypt
+pyjwt
+python-dotenv
+requests
+pytest

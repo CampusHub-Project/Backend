@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # ----------------------------
+  # BACKEND (Sanic API)
+  # ----------------------------
+  backend:
+    build: ./backend
+    container_name: campushub_backend
+    volumes:
+      - ./backend:/app  # Canlı kod güncellemesi (Hot Reload) için
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_URL=mysql://hubuser:hubpass@db:3306/campushub
+      - REDIS_URL=redis://cache:6379
+      - SECRET_KEY=gizli_anahtar_buraya
+    depends_on:
+      - db
+      - cache
+    networks:
+      - hub_network
+    restart: unless-stopped
+
+  # ----------------------------
+  # VERİTABANI (MySQL 8)
+  # ----------------------------
+  db:
+    image: mysql:8.0
+    container_name: campushub_db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: campushub
+      MYSQL_USER: hubuser
+      MYSQL_PASSWORD: hubpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - hub_network
+    command: --default-authentication-plugin=mysql_native_password
+
+  # ----------------------------
+  # ÖNBELLEK (Redis - Cache)
+  # ----------------------------
+  cache:
+    image: redis:7-alpine
+    container_name: campushub_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - hub_network
+
+# Veritabanı verilerini kalıcı yap
+volumes:
+  db_data:
+
+# Servisleri aynı ağda topla
+networks:
+  hub_network:
+    driver: bridge
