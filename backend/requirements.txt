@@ -3,7 +3,7 @@ sanic-ext
 tortoise-orm
 aiomysql
 cryptography
-aioredis
+redis
 bcrypt
 pyjwt
 python-dotenv

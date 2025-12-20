@@ -1,17 +1,22 @@
 from src.models import Events, Clubs, EventParticipation, ParticipationStatus, UserRole
 from tortoise.exceptions import DoesNotExist
 from src.services.notification_service import NotificationService
+from datetime import datetime
+from tortoise.expressions import Q  # <--- BU IMPORT ÖNEMLİ
 
 class EventService:
 
+    # ... create_event, delete_event, get_event_detail AYNI KALACAK ...
+    # ... (Buraya önceki cevaptaki kodların aynısı gelecek) ...
+    
     @staticmethod
     async def create_event(user_ctx, data):
+        # (Önceki kodun aynısı - Değişiklik yok)
         club_id = data.get("club_id")
         club = await Clubs.get_or_none(club_id=club_id)
-        if not club:
+        if not club or club.is_deleted:
             return {"error": "Club not found"}, 404
 
-        # Yetki Kontrolü: Admin veya o kulübün başkanı
         if user_ctx["role"] != UserRole.ADMIN and club.president_id != user_ctx["sub"]:
             return {"error": "Unauthorized."}, 403
 
@@ -27,13 +32,33 @@ class EventService:
         )
 
         await NotificationService.notify_followers(club.club_id, club.club_name, event.title)
-        
         return {"message": "Event created", "event_id": event.event_id}, 201
 
     @staticmethod
-    async def get_event_detail(event_id: int):
+    async def delete_event(user_ctx, event_id: int):
+        # (Önceki kodun aynısı - Değişiklik yok)
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
+            is_admin = user_ctx["role"] == UserRole.ADMIN
+            is_president = event.club.president_id == user_ctx["sub"]
+            
+            if not (is_admin or is_president):
+                return {"error": "Unauthorized"}, 403
+
+            event.is_deleted = True
+            event.deleted_at = datetime.utcnow()
+            await event.save()
+            return {"message": "Event deleted"}, 200
+        except DoesNotExist:
+            return {"error": "Event not found"}, 404
+
+    @staticmethod
+    async def get_event_detail(event_id: int):
+        # (Önceki kodun aynısı - Değişiklik yok)
+        try:
+            event = await Events.get(event_id=event_id).prefetch_related("club")
+            if event.is_deleted: return {"error": "Event not found"}, 404
+            
             participant_count = await EventParticipation.filter(
                 event_id=event_id, status=ParticipationStatus.GOING
             ).count()
@@ -54,10 +79,29 @@ class EventService:
             }, 200
         except DoesNotExist:
             return {"error": "Event not found"}, 404
-        
+
+    # --- GÜNCELLENEN KISIM: PAGINATION & SEARCH ---
     @staticmethod
-    async def get_events():
-        events = await Events.filter(is_deleted=False).prefetch_related("club").order_by("event_date")
+    async def get_events(page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
+        """Filtreli ve Sayfalı Etkinlik Listesi"""
+        
+        # 1. Temel Sorgu: Silinmemiş etkinlikler
+        query = Events.filter(is_deleted=False)
+
+        # 2. Arama Filtresi (Başlık VEYA Açıklamada ara)
+        if search:
+            query = query.filter(Q(title__icontains=search) | Q(description__icontains=search))
+        
+        # 3. Tarih Filtresi (Seçilen tarihten sonrakiler)
+        if date_filter:
+            query = query.filter(event_date__gte=date_filter)
+
+        # Toplam sayıyı al (Pagination metadatasında göstermek için)
+        total_count = await query.count()
+
+        # 4. Sayfalama (Offset/Limit)
+        offset = (page - 1) * limit
+        events = await query.prefetch_related("club").order_by("event_date").offset(offset).limit(limit)
         
         result = []
         for e in events:
@@ -71,12 +115,23 @@ class EventService:
                 "image_url": e.image_url,
                 "capacity": e.quota
             })
-        return {"events": result}, 200
+            
+        return {
+            "events": result,
+            "pagination": {
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "total_pages": (total_count + limit - 1) // limit
+            }
+        }, 200
 
+    # ... join_event, leave_event, remove_participant AYNI KALACAK ...
     @staticmethod
     async def join_event(user_ctx, event_id: int):
         try:
             event = await Events.get(event_id=event_id)
+            if event.is_deleted: return {"error": "Event not found"}, 404
             
             current_count = await EventParticipation.filter(event_id=event_id, status=ParticipationStatus.GOING).count()
             if event.quota > 0 and current_count >= event.quota:
@@ -92,6 +147,29 @@ class EventService:
                 status=ParticipationStatus.GOING
             )
             return {"message": "Successfully joined"}, 200
+        except DoesNotExist:
+            return {"error": "Event not found"}, 404
+
+    @staticmethod
+    async def leave_event(user_ctx, event_id: int):
+        deleted_count = await EventParticipation.filter(user_id=user_ctx["sub"], event_id=event_id).delete()
+        if deleted_count == 0:
+            return {"error": "You are not participating in this event"}, 400
+        return {"message": "Successfully left the event"}, 200
+
+    @staticmethod
+    async def remove_participant(user_ctx, event_id: int, target_user_id: int):
+        try:
+            event = await Events.get(event_id=event_id).prefetch_related("club")
+            is_admin = user_ctx["role"] == UserRole.ADMIN
+            is_president = event.club.president_id == user_ctx["sub"]
             
+            if not (is_admin or is_president):
+                return {"error": "Unauthorized"}, 403
+
+            deleted_count = await EventParticipation.filter(user_id=target_user_id, event_id=event_id).delete()
+            if deleted_count == 0:
+                return {"error": "User is not a participant"}, 404
+            return {"message": "Participant removed"}, 200
         except DoesNotExist:
             return {"error": "Event not found"}, 404

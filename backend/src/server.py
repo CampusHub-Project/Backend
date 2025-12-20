@@ -9,7 +9,7 @@ from src.routes.events import events_bp # <--- YENİ
 from src.routes.comments import comments_bp
 from src.routes.users import users_bp
 from src.routes.notifications import notif_bp
-import aioredis
+from redis import asyncio as aioredis
 
 app = Sanic("CampusHubAPI")
 app.config.CORS_ORIGINS = "*"
