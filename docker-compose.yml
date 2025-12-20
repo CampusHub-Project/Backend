@@ -9,6 +9,7 @@ services:
     container_name: campushub_backend
     volumes:
       - ./backend:/app  # Canlı kod güncellemesi (Hot Reload) için
+    command: sanic src.server:app --host=0.0.0.0 --port=8000 --debug --auto-reload
     ports:
       - "8000:8000"
     environment:

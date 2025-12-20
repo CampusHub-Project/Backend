@@ -1,17 +1,14 @@
+import json
 from src.models import Events, Clubs, EventParticipation, ParticipationStatus, UserRole
 from tortoise.exceptions import DoesNotExist
 from src.services.notification_service import NotificationService
 from datetime import datetime
-from tortoise.expressions import Q  # <--- BU IMPORT ÖNEMLİ
+from tortoise.expressions import Q
 
 class EventService:
 
-    # ... create_event, delete_event, get_event_detail AYNI KALACAK ...
-    # ... (Buraya önceki cevaptaki kodların aynısı gelecek) ...
-    
     @staticmethod
     async def create_event(user_ctx, data):
-        # (Önceki kodun aynısı - Değişiklik yok)
         club_id = data.get("club_id")
         club = await Clubs.get_or_none(club_id=club_id)
         if not club or club.is_deleted:
@@ -36,7 +33,6 @@ class EventService:
 
     @staticmethod
     async def delete_event(user_ctx, event_id: int):
-        # (Önceki kodun aynısı - Değişiklik yok)
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
             is_admin = user_ctx["role"] == UserRole.ADMIN
@@ -54,7 +50,6 @@ class EventService:
 
     @staticmethod
     async def get_event_detail(event_id: int):
-        # (Önceki kodun aynısı - Değişiklik yok)
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
             if event.is_deleted: return {"error": "Event not found"}, 404
@@ -80,32 +75,38 @@ class EventService:
         except DoesNotExist:
             return {"error": "Event not found"}, 404
 
-    # --- GÜNCELLENEN KISIM: PAGINATION & SEARCH ---
+    # --- REDIS VE FİLTRELEME GÜNCELLEMESİ ---
     @staticmethod
-    async def get_events(page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
-        """Filtreli ve Sayfalı Etkinlik Listesi"""
+    async def get_events(redis, page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
+        """Redis Cache Destekli Etkinlik Listesi"""
         
-        # 1. Temel Sorgu: Silinmemiş etkinlikler
-        query = Events.filter(is_deleted=False)
+        # 1. Cache Anahtarı
+        cache_key = f"events:page:{page}:lim:{limit}:s:{search}:d:{date_filter}"
+        
+        # 2. Redis Kontrolü
+        if redis:
+            cached_data = await redis.get(cache_key)
+            if cached_data:
+                return json.loads(cached_data), 200
 
-        # 2. Arama Filtresi (Başlık VEYA Açıklamada ara)
+        # 3. Veritabanı Sorgusu (Cache yoksa)
+        # Sadece silinmemiş VE onaylı (active) kulüpler
+        query = Events.filter(is_deleted=False, club__status="active")
+
         if search:
             query = query.filter(Q(title__icontains=search) | Q(description__icontains=search))
         
-        # 3. Tarih Filtresi (Seçilen tarihten sonrakiler)
         if date_filter:
             query = query.filter(event_date__gte=date_filter)
 
-        # Toplam sayıyı al (Pagination metadatasında göstermek için)
         total_count = await query.count()
 
-        # 4. Sayfalama (Offset/Limit)
         offset = (page - 1) * limit
         events = await query.prefetch_related("club").order_by("event_date").offset(offset).limit(limit)
         
-        result = []
+        result_list = []
         for e in events:
-            result.append({
+            result_list.append({
                 "id": e.event_id,
                 "title": e.title,
                 "description": e.description,
@@ -116,17 +117,22 @@ class EventService:
                 "capacity": e.quota
             })
             
-        return {
-            "events": result,
+        response_data = {
+            "events": result_list,
             "pagination": {
                 "total": total_count,
                 "page": page,
                 "limit": limit,
                 "total_pages": (total_count + limit - 1) // limit
             }
-        }, 200
+        }
 
-    # ... join_event, leave_event, remove_participant AYNI KALACAK ...
+        # 4. Redis'e Kaydet (60 Saniye)
+        if redis:
+            await redis.set(cache_key, json.dumps(response_data), ex=60)
+
+        return response_data, 200
+
     @staticmethod
     async def join_event(user_ctx, event_id: int):
         try:

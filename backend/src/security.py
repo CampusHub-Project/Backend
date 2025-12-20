@@ -16,7 +16,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT Token Üret
 def create_access_token(user_id: int, role: str) -> str:
     payload = {
-        "sub": user_id,           # Subject (Kullanıcı ID)
+        "sub": str(user_id),      # Subject (Kullanıcı ID)
         "role": role,             # Rol (student, admin vs.)
         "exp": datetime.utcnow() + timedelta(days=1) # 1 Gün geçerli
     }

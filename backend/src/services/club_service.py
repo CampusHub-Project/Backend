@@ -1,3 +1,4 @@
+import json
 from src.models import Clubs, ClubFollowers, UserRole
 from tortoise.exceptions import DoesNotExist
 from datetime import datetime
@@ -6,10 +7,6 @@ class ClubService:
 
     @staticmethod
     async def create_club(user_ctx, data):
-        # YENİ MANTIK: Rol kontrolünü kaldırdık.
-        # Admin oluşturursa -> ACTIVE
-        # Öğrenci oluşturursa -> PENDING (Onay Bekliyor)
-        
         status = "active" if user_ctx["role"] == UserRole.ADMIN else "pending"
 
         try:
@@ -19,7 +16,7 @@ class ClubService:
                 logo_url=data.get("image_url"),
                 president_id=user_ctx["sub"],
                 created_by_id=user_ctx["sub"],
-                status=status  # <-- Status eklendi
+                status=status
             )
             
             msg = "Club created successfully" if status == "active" else "Club application submitted for approval"
@@ -28,10 +25,8 @@ class ClubService:
         except Exception as e:
             return {"error": str(e)}, 400
 
-    # --- YENİ METOD: KULÜP ONAYLAMA ---
     @staticmethod
     async def approve_club(user_ctx, club_id: int):
-        # Sadece Admin onaylayabilir
         if user_ctx["role"] != UserRole.ADMIN:
             return {"error": "Unauthorized"}, 403
             
@@ -48,11 +43,6 @@ class ClubService:
         except DoesNotExist:
             return {"error": "Club not found"}, 404
 
-    # ... Diğer metodlar (delete_club, get_all_clubs vb.) AYNI KALACAK ...
-    # Ancak get_all_clubs içinde sadece 'active' olanları getirmek isteyebilirsiniz
-    # Şimdilik hepsini getiriyoruz ki admin bekleyenleri de görsün.
-    # Frontend tarafında filtreleme yapılabilir veya buraya parametre eklenebilir.
-    
     @staticmethod
     async def delete_club(user_ctx, club_id: int):
         if user_ctx["role"] != UserRole.ADMIN:
@@ -66,10 +56,21 @@ class ClubService:
         except DoesNotExist:
             return {"error": "Club not found"}, 404
 
+    # --- REDIS VE FİLTRELEME GÜNCELLEMESİ ---
     @staticmethod
-    async def get_all_clubs():
-        # Sadece silinmemişleri getir
-        clubs = await Clubs.filter(is_deleted=False).all()
+    async def get_all_clubs(redis=None):
+        """Redis Cache Destekli Kulüp Listesi"""
+        cache_key = "clubs:all_active"
+        
+        # 1. Cache Kontrolü
+        if redis:
+            cached_data = await redis.get(cache_key)
+            if cached_data:
+                return json.loads(cached_data), 200
+        
+        # 2. Veritabanı Sorgusu
+        # Sadece silinmemiş VE aktif olanları getir
+        clubs = await Clubs.filter(is_deleted=False, status="active").all()
         
         clubs_list = []
         for club in clubs:
@@ -78,11 +79,17 @@ class ClubService:
                 "name": club.club_name,
                 "description": club.description,
                 "image_url": club.logo_url,
-                "status": club.status, # Durumu da frontend görsün
+                "status": club.status,
                 "created_at": str(club.created_at)
             })
+            
+        response_data = {"clubs": clubs_list}
         
-        return {"clubs": clubs_list}, 200
+        # 3. Redis'e Yaz (300 Saniye = 5 Dakika)
+        if redis:
+            await redis.set(cache_key, json.dumps(response_data), ex=300)
+        
+        return response_data, 200
 
     @staticmethod
     async def get_club_details(club_id: int):
@@ -122,7 +129,6 @@ class ClubService:
             club = await Clubs.get(club_id=club_id)
             if club.is_deleted: return {"error": "Club not found"}, 404
             
-            # Sadece aktif kulüpler takip edilebilir
             if club.status != "active":
                 return {"error": "Cannot follow pending club"}, 400
 

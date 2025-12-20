@@ -8,15 +8,12 @@ clubs_bp = Blueprint("clubs", url_prefix="/clubs")
 @clubs_bp.post("/")
 @authorized()
 async def create_club(request):
-    # Öğrenciler de artık istek atabilir
     result, status = await ClubService.create_club(request.ctx.user, request.json)
     return json(result, status=status)
 
-# --- YENİ ROUTE: ONAYLAMA ---
 @clubs_bp.post("/<club_id:int>/approve")
 @authorized()
 async def approve_club(request, club_id):
-    # Sadece Admin (Servis içinde kontrol ediliyor)
     result, status = await ClubService.approve_club(request.ctx.user, club_id)
     return json(result, status=status)
 
@@ -26,9 +23,11 @@ async def delete_club(request, club_id):
     result, status = await ClubService.delete_club(request.ctx.user, club_id)
     return json(result, status=status)
 
+# --- GÜNCELLENEN ROUTE (REDIS EKLENDİ) ---
 @clubs_bp.get("/")
 async def list_clubs(request):
-    result, status = await ClubService.get_all_clubs()
+    redis = request.app.ctx.redis
+    result, status = await ClubService.get_all_clubs(redis)
     return json(result, status=status)
 
 @clubs_bp.get("/<club_id:int>")
