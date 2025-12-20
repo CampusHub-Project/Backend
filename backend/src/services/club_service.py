@@ -6,7 +6,7 @@ from datetime import datetime
 class ClubService:
 
     @staticmethod
-    async def create_club(user_ctx, data):
+    async def create_club(user_ctx, data, redis=None): # <--- Redis parametresi eklendi
         status = "active" if user_ctx["role"] == UserRole.ADMIN else "pending"
 
         try:
@@ -20,13 +20,19 @@ class ClubService:
             )
             
             msg = "Club created successfully" if status == "active" else "Club application submitted for approval"
+            
+            # --- CACHE TEMİZLEME ---
+            # Eğer admin oluşturduysa (aktifse) listeyi temizle ki hemen görünsün
+            if status == "active" and redis:
+                await redis.delete("clubs:all_active")
+
             return {"message": msg, "club": {"id": club.club_id, "name": club.club_name, "status": status}}, 201
             
         except Exception as e:
             return {"error": str(e)}, 400
 
     @staticmethod
-    async def approve_club(user_ctx, club_id: int):
+    async def approve_club(user_ctx, club_id: int, redis=None): # <--- Redis parametresi eklendi
         if user_ctx["role"] != UserRole.ADMIN:
             return {"error": "Unauthorized"}, 403
             
@@ -39,12 +45,18 @@ class ClubService:
                 
             club.status = "active"
             await club.save()
+            
+            # --- CACHE TEMİZLEME ---
+            # Yeni bir kulüp onaylandığı için listeyi sil
+            if redis:
+                await redis.delete("clubs:all_active")
+
             return {"message": f"Club '{club.club_name}' approved successfully"}, 200
         except DoesNotExist:
             return {"error": "Club not found"}, 404
 
     @staticmethod
-    async def delete_club(user_ctx, club_id: int):
+    async def delete_club(user_ctx, club_id: int, redis=None): # <--- Redis parametresi eklendi
         if user_ctx["role"] != UserRole.ADMIN:
             return {"error": "Unauthorized"}, 403
         try:
@@ -52,6 +64,12 @@ class ClubService:
             club.is_deleted = True
             club.deleted_at = datetime.utcnow()
             await club.save()
+            
+            # --- CACHE TEMİZLEME ---
+            # Kulüp silindiği için listeyi sil
+            if redis:
+                await redis.delete("clubs:all_active")
+
             return {"message": "Club deleted successfully"}, 200
         except DoesNotExist:
             return {"error": "Club not found"}, 404
@@ -69,7 +87,6 @@ class ClubService:
                 return json.loads(cached_data), 200
         
         # 2. Veritabanı Sorgusu
-        # Sadece silinmemiş VE aktif olanları getir
         clubs = await Clubs.filter(is_deleted=False, status="active").all()
         
         clubs_list = []
