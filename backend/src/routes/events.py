@@ -17,10 +17,9 @@ async def delete_event(request, event_id):
     result, status = await EventService.delete_event(request.ctx.user, event_id)
     return json(result, status=status)
 
-# --- GÜNCELLENEN ROUTE ---
+# --- GÜNCELLENEN ROUTE (REDIS EKLENDİ) ---
 @events_bp.get("/")
 async def list_events(request):
-    # Query Parametrelerini Al (?page=1&limit=20&search=xyz)
     try:
         page = int(request.args.get("page", 1))
         limit = int(request.args.get("limit", 20))
@@ -31,8 +30,10 @@ async def list_events(request):
     search = request.args.get("search")
     date_filter = request.args.get("date")
 
-    # Servise parametreleri ilet
-    result, status = await EventService.get_events(page, limit, search, date_filter)
+    # Redis bağlantısını servise gönderiyoruz
+    redis = request.app.ctx.redis
+    
+    result, status = await EventService.get_events(redis, page, limit, search, date_filter)
     return json(result, status=status)
 
 @events_bp.get("/<event_id:int>")

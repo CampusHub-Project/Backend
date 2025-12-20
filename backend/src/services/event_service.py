@@ -1,3 +1,4 @@
+import json
 from src.models import Events, Clubs, EventParticipation, ParticipationStatus, UserRole
 from tortoise.exceptions import DoesNotExist
 from src.services.notification_service import NotificationService
@@ -74,31 +75,38 @@ class EventService:
         except DoesNotExist:
             return {"error": "Event not found"}, 404
 
+    # --- REDIS VE FİLTRELEME GÜNCELLEMESİ ---
     @staticmethod
-    async def get_events(page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
-        """Filtreli ve Sayfalı Etkinlik Listesi"""
+    async def get_events(redis, page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
+        """Redis Cache Destekli Etkinlik Listesi"""
         
-        # 1. Temel Sorgu: Silinmemiş etkinlikler VE Onaylı Kulüpler
+        # 1. Cache Anahtarı
+        cache_key = f"events:page:{page}:lim:{limit}:s:{search}:d:{date_filter}"
+        
+        # 2. Redis Kontrolü
+        if redis:
+            cached_data = await redis.get(cache_key)
+            if cached_data:
+                return json.loads(cached_data), 200
+
+        # 3. Veritabanı Sorgusu (Cache yoksa)
+        # Sadece silinmemiş VE onaylı (active) kulüpler
         query = Events.filter(is_deleted=False, club__status="active")
 
-        # 2. Arama Filtresi (Başlık VEYA Açıklamada ara)
         if search:
             query = query.filter(Q(title__icontains=search) | Q(description__icontains=search))
         
-        # 3. Tarih Filtresi (Seçilen tarihten sonrakiler)
         if date_filter:
             query = query.filter(event_date__gte=date_filter)
 
-        # Toplam sayıyı al (Pagination metadatasında göstermek için)
         total_count = await query.count()
 
-        # 4. Sayfalama (Offset/Limit)
         offset = (page - 1) * limit
         events = await query.prefetch_related("club").order_by("event_date").offset(offset).limit(limit)
         
-        result = []
+        result_list = []
         for e in events:
-            result.append({
+            result_list.append({
                 "id": e.event_id,
                 "title": e.title,
                 "description": e.description,
@@ -109,15 +117,21 @@ class EventService:
                 "capacity": e.quota
             })
             
-        return {
-            "events": result,
+        response_data = {
+            "events": result_list,
             "pagination": {
                 "total": total_count,
                 "page": page,
                 "limit": limit,
                 "total_pages": (total_count + limit - 1) // limit
             }
-        }, 200
+        }
+
+        # 4. Redis'e Kaydet (60 Saniye)
+        if redis:
+            await redis.set(cache_key, json.dumps(response_data), ex=60)
+
+        return response_data, 200
 
     @staticmethod
     async def join_event(user_ctx, event_id: int):
