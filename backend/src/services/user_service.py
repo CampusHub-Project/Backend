@@ -1,6 +1,5 @@
 from src.models import EventParticipation, ParticipationStatus, Users, EventComments, ClubFollowers
 from tortoise.exceptions import DoesNotExist
-from datetime import datetime
 
 class UserService:
 
@@ -15,10 +14,10 @@ class UserService:
         for p in participations:
             if p.event:
                 history.append({
-                    "event_id": p.event.id,
+                    "event_id": p.event.event_id,
                     "title": p.event.title,
-                    "date": str(p.event.date),
-                    "club_name": p.event.club.name if p.event.club else "Bilinmiyor",
+                    "date": str(p.event.event_date),
+                    "club_name": p.event.club.club_name if p.event.club else "Bilinmiyor",
                     "joined_at": str(p.created_at)
                 })
         
@@ -26,112 +25,66 @@ class UserService:
 
     @staticmethod
     async def get_user_profile(user_id: int):
-        """Get complete user profile with all activities"""
         try:
-            user = await Users.get(id=user_id)
+            user = await Users.get(user_id=user_id)
             
-            # Get participated events
-            participations = await EventParticipation.filter(
-                user_id=user_id
-            ).prefetch_related("event", "event__club").order_by("-created_at")
+            # Katıldığı Etkinlikler
+            participations = await EventParticipation.filter(user_id=user_id).prefetch_related("event", "event__club")
+            participated_events = [
+                {
+                    "id": p.event.event_id,
+                    "title": p.event.title,
+                    "date": str(p.event.event_date),
+                    "club_name": p.event.club.club_name if p.event.club else "Unknown"
+                } for p in participations if p.event
+            ]
             
-            participated_events = []
-            for p in participations:
-                if p.event:
-                    participated_events.append({
-                        "id": p.event.id,
-                        "title": p.event.title,
-                        "date": str(p.event.date),
-                        "club_name": p.event.club.name if p.event.club else "Unknown"
-                    })
-            
-            # Get commented events
-            comments = await EventComments.filter(
-                user_id=user_id
-            ).prefetch_related("event").order_by("-created_at")
-            
-            commented_events = []
-            seen_events = set()
-            for c in comments:
-                if c.event and c.event.id not in seen_events:
-                    commented_events.append({
-                        "id": c.event.id,
-                        "title": c.event.title,
-                        "comment": c.content
-                    })
-                    seen_events.add(c.event.id)
-            
-            # Get followed clubs
-            followed_clubs = await ClubFollowers.filter(
-                user_id=user_id
-            ).prefetch_related("club")
-            
-            clubs = [{"id": f.club.id, "name": f.club.name} for f in followed_clubs if f.club]
-            
-            # Safely get profile fields (use getattr with default values)
-            profile_photo = getattr(user, 'profile_photo', None)
-            bio = getattr(user, 'bio', None)
-            interests = getattr(user, 'interests', None)
+            # Takip Edilen Kulüpler
+            followed = await ClubFollowers.filter(user_id=user_id).prefetch_related("club")
+            clubs = [{"id": f.club.club_id, "name": f.club.club_name} for f in followed if f.club]
             
             return {
                 "profile": {
-                    "id": user.id,
+                    "id": user.user_id,
                     "email": user.email,
-                    "full_name": user.full_name,
+                    "full_name": f"{user.first_name} {user.last_name}",
+                    "department": user.department,
                     "role": user.role,
-                    "profile_photo": profile_photo,
-                    "bio": bio,
-                    "interests": interests,
-                    "created_at": str(user.created_at)
+                    "profile_photo": user.profile_image,
+                    "bio": user.bio,
+                    "interests": user.interests
                 },
                 "activities": {
                     "participated_events": participated_events,
-                    "commented_events": commented_events,
-                    "liked_events": [],  # Empty for now
-                    "disliked_events": [],  # Empty for now
                     "followed_clubs": clubs
                 }
             }, 200
-            
         except DoesNotExist:
             return {"error": "User not found"}, 404
-        except Exception as e:
-            print(f"Error in get_user_profile: {str(e)}")
-            return {"error": str(e)}, 500
 
     @staticmethod
     async def update_profile(user_id: int, data: dict):
-        """Update user profile information"""
         try:
-            user = await Users.get(id=user_id)
+            user = await Users.get(user_id=user_id)
             
-            # Only update fields that exist in the model
+            # İsim güncelleme isteği gelirse ayır
             if "full_name" in data:
-                user.full_name = data["full_name"]
+                names = data["full_name"].strip().split(" ")
+                user.first_name = names[0]
+                user.last_name = " ".join(names[1:]) if len(names) > 1 else ""
             
-            # Check if new fields exist before updating
-            if hasattr(user, 'profile_photo') and "profile_photo" in data:
-                user.profile_photo = data["profile_photo"]
-            if hasattr(user, 'bio') and "bio" in data:
-                user.bio = data["bio"]
-            if hasattr(user, 'interests') and "interests" in data:
-                user.interests = data["interests"]
+            if "bio" in data: user.bio = data["bio"]
+            if "interests" in data: user.interests = data["interests"]
+            if "department" in data: user.department = data["department"]
+            if "profile_photo" in data: user.profile_image = data["profile_photo"]
                 
             await user.save()
-            
             return {
-                "message": "Profile updated successfully",
+                "message": "Profile updated",
                 "profile": {
-                    "id": user.id,
-                    "full_name": user.full_name,
-                    "profile_photo": getattr(user, 'profile_photo', None),
-                    "bio": getattr(user, 'bio', None),
-                    "interests": getattr(user, 'interests', None)
+                    "full_name": f"{user.first_name} {user.last_name}",
+                    "bio": user.bio
                 }
             }, 200
-            
         except DoesNotExist:
             return {"error": "User not found"}, 404
-        except Exception as e:
-            print(f"Error in update_profile: {str(e)}")
-            return {"error": str(e)}, 400

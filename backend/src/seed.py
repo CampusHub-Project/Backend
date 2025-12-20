@@ -1,7 +1,7 @@
 import asyncio
 from tortoise import Tortoise
 from src.config import DB_URL
-from src.models import Users, Clubs, Events, UserRole, ParticipationStatus
+from src.models import Users, Clubs, Events, UserRole
 from src.security import hash_password
 
 async def seed_data():
@@ -10,88 +10,82 @@ async def seed_data():
         db_url=DB_URL,
         modules={'models': ['src.models']}
     )
-    # Şemayı garantiye al
+    # Şemayı oluştur (Eski tabloları silip yenisini kurar)
     await Tortoise.generate_schemas()
 
-    print("🗑️  Eski veriler temizleniyor...")
+    print("🗑️  Tablolar temizleniyor...")
     await Events.all().delete()
     await Clubs.all().delete()
     await Users.all().delete()
 
-    print("👤 Kullanıcılar oluşturuluyor...")
-    # 1. Sistem Yöneticisi (Admin)
+    print("👤 Kullanıcılar (Öğrenci No ile) oluşturuluyor...")
+    
+    # 1. Sistem Yöneticisi (ID: 1000)
     admin = await Users.create(
+        user_id=1000, 
         email="admin@campus.hub",
-        password_hash=hash_password("123456"),
-        full_name="Sistem Yöneticisi",
-        role=UserRole.ADMIN
+        password=hash_password("123456"),
+        first_name="Sistem",
+        last_name="Yöneticisi",
+        role=UserRole.ADMIN,
+        department="Bilgi İşlem"
     )
 
-    # 2. Kulüp Başkanı
+    # 2. Kulüp Başkanı (ID: 20201001)
     club_admin = await Users.create(
+        user_id=20201001, 
         email="baskan@teknoloji.kulubu",
-        password_hash=hash_password("123456"),
-        full_name="Tech Başkan",
-        role=UserRole.CLUB_ADMIN
+        password=hash_password("123456"),
+        first_name="Can",
+        last_name="Tekno",
+        role=UserRole.CLUB_ADMIN,
+        department="Bilgisayar Mühendisliği"
     )
 
-    # 3. Öğrenci
+    # 3. Öğrenci (ID: 20232005)
     student = await Users.create(
+        user_id=20232005, 
         email="ogrenci@univ.edu",
-        password_hash=hash_password("123456"),
-        full_name="Ahmet Öğrenci",
-        role=UserRole.STUDENT
+        password=hash_password("123456"),
+        first_name="Ahmet",
+        last_name="Çalışkan",
+        role=UserRole.STUDENT,
+        department="Endüstri Mühendisliği"
     )
 
-    print("club 🏰 Kulüpler oluşturuluyor...")
+    print("🏰 Kulüpler oluşturuluyor...")
     tech_club = await Clubs.create(
-        name="Teknoloji Kulübü",
+        club_name="Teknoloji Kulübü",
         description="Yazılım, donanım ve yapay zeka tutkunlarının buluşma noktası.",
-        image_url="https://images.unsplash.com/photo-1519389950473-47ba0277781c",
-        admin=club_admin
+        logo_url="https://images.unsplash.com/photo-1519389950473-47ba0277781c",
+        president=club_admin,
+        created_by=admin
     )
 
     art_club = await Clubs.create(
-        name="Sanat ve Tasarım Kulübü",
+        club_name="Sanat ve Tasarım Kulübü",
         description="Resim, müzik ve dijital sanatlarla ilgilenenler buraya!",
-        image_url="https://images.unsplash.com/photo-1513364776144-60967b0f800f",
-        admin=admin # Şimdilik admin yönetsin
+        logo_url="https://images.unsplash.com/photo-1513364776144-60967b0f800f",
+        president=admin,
+        created_by=admin
     )
 
     print("📅 Etkinlikler oluşturuluyor...")
     await Events.create(
         title="Büyük Hackathon 2024",
-        description="48 saat sürecek kodlama maratonuna hazır mısın? Ödüllü yarışma!",
-        date="2025-05-20T09:00:00",
+        description="48 saat sürecek kodlama maratonuna hazır mısın?",
+        event_date="2025-05-20T09:00:00",
         location="Mühendislik Fakültesi - B Blok",
-        capacity=100,
+        quota=100,
         club=tech_club,
-        image_url="https://images.unsplash.com/photo-1504384308090-c54be3855833"
-    )
-
-    await Events.create(
-        title="Python ile Yapay Zeka Atölyesi",
-        description="Sıfırdan yapay zeka modelleri eğitmeyi öğreniyoruz.",
-        date="2025-06-10T14:00:00",
-        location="Online (Zoom)",
-        capacity=50,
-        club=tech_club,
-        image_url="https://images.unsplash.com/photo-1555949963-ff9fe0c870eb"
-    )
-
-    await Events.create(
-        title="Modern Sanat Sergisi",
-        description="Öğrencilerimizin eserlerinden oluşan yıl sonu sergisi.",
-        date="2025-04-15T10:00:00",
-        location="Kampüs Meydanı",
-        capacity=0, # Sınırsız
-        club=art_club,
-        image_url="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b"
+        image_url="https://images.unsplash.com/photo-1504384308090-c54be3855833",
+        created_by=club_admin
     )
 
     print("✅ VERİLER BAŞARIYLA YÜKLENDİ! 🚀")
-    print(f"👉 Admin Girişi: admin@campus.hub / 123456")
-    print(f"👉 Öğrenci Girişi: ogrenci@univ.edu / 123456")
+    print(f"👉 Admin: admin@campus.hub (Pass: 123456)")
+    print(f"👉 Kulüp Başkanı: baskan@teknoloji.kulubu")
+    print(f"👉 Öğrenci: ogrenci@univ.edu")
     
     await Tortoise.close_connections()
 
