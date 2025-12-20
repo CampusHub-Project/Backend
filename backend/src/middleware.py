@@ -17,6 +17,13 @@ def authorized():
             if not payload:
                 return json({"error": "Invalid or expired token"}, 401)
             
+            # --- DÜZELTME BURADA BAŞLIYOR ---
+            # Token içindeki string ID'yi tekrar integer'a çeviriyoruz.
+            # Böylece veritabanı ID'leri ile kıyaslama yapabiliriz.
+            if "sub" in payload and isinstance(payload["sub"], str) and payload["sub"].isdigit():
+                payload["sub"] = int(payload["sub"])
+            # --- DÜZELTME BİTİŞ ---
+            
             # Kullanıcı bilgisini request objesine ekle (diğer fonksiyonlarda kullanmak için)
             request.ctx.user = payload
             
