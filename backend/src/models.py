@@ -1,8 +1,7 @@
 from tortoise import fields, models
 from enum import Enum
 
-# --- ENUM Sınıfları (Sabit Seçenekler) ---
-
+# --- ENUM Sınıfları (Tip güvenliği için) ---
 class UserRole(str, Enum):
     STUDENT = "student"
     CLUB_ADMIN = "club_admin"
@@ -12,109 +11,104 @@ class ParticipationStatus(str, Enum):
     GOING = "going"
     INTERESTED = "interested"
 
-# --- MODELLER (Tablolar) ---
-
-class Users(models.Model):
-    id = fields.IntField(pk=True)
-    email = fields.CharField(max_length=255, unique=True, index=True)
-    password_hash = fields.CharField(max_length=255)
-    full_name = fields.CharField(max_length=100)
-    role = fields.CharEnumField(UserRole, default=UserRole.STUDENT)
-    
-    # NEW FIELDS for profile
-    profile_photo = fields.CharField(max_length=500, null=True)  # URL to profile photo
-    bio = fields.TextField(null=True)  # User bio/about me
-    interests = fields.TextField(null=True)  # User interests (comma-separated or JSON)
-    
+# --- BASE MODEL (Ortak Özellikler) ---
+class BaseModel(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
+    is_deleted = fields.BooleanField(default=False)
+    deleted_at = fields.DatetimeField(null=True)
 
-    # İlişkiler (Reverse relations)
-    clubs_managed: fields.ReverseRelation["Clubs"]
-    participations: fields.ReverseRelation["EventParticipation"]
-    notifications: fields.ReverseRelation["Notifications"]
+    class Meta:
+        abstract = True
+
+# --- TABLOLAR ---
+
+class Users(BaseModel):
+    # generated=False -> Veritabanı ID üretmez, biz Okul Numarasını ID olarak veririz.
+    user_id = fields.BigIntField(pk=True, generated=False) 
+    
+    first_name = fields.CharField(max_length=50)
+    last_name = fields.CharField(max_length=50)
+    email = fields.CharField(max_length=150, unique=True, index=True)
+    password = fields.CharField(max_length=255)
+    
+    # Profil detayları
+    department = fields.CharField(max_length=100, null=True)
+    gender = fields.CharField(max_length=10, null=True)
+    profile_image = fields.CharField(max_length=255, null=True)
+    bio = fields.TextField(null=True)
+    interests = fields.TextField(null=True)
+    
+    role = fields.CharEnumField(UserRole, default=UserRole.STUDENT)
 
     class Meta:
         table = "users"
 
-class Clubs(models.Model):
-    id = fields.IntField(pk=True)
-    name = fields.CharField(max_length=100, unique=True)
+class Clubs(BaseModel):
+    club_id = fields.IntField(pk=True)
+    club_name = fields.CharField(max_length=150, unique=True)
     description = fields.TextField(null=True)
-    image_url = fields.CharField(max_length=255, null=True)
-    admin = fields.ForeignKeyField('models.Users', related_name='clubs_managed')
-    created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
-
-    events: fields.ReverseRelation["Events"]
+    logo_url = fields.CharField(max_length=255, null=True)
+    status = fields.CharField(max_length=20, default="active")
+    
+    # Kulüp Başkanı ve Oluşturan Kişi
+    president = fields.ForeignKeyField('models.Users', related_name='led_clubs', on_delete=fields.SET_NULL, null=True)
+    created_by = fields.ForeignKeyField('models.Users', related_name='created_clubs', on_delete=fields.SET_NULL, null=True)
 
     class Meta:
         table = "clubs"
 
-class ClubFollowers(models.Model):
+class ClubFollowers(BaseModel):
     id = fields.IntField(pk=True)
     user = fields.ForeignKeyField('models.Users', related_name='following')
     club = fields.ForeignKeyField('models.Clubs', related_name='followers')
-    created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "club_followers"
         unique_together = ("user", "club")
 
-class Events(models.Model):
-    id = fields.IntField(pk=True)
-    title = fields.CharField(max_length=150)
-    description = fields.TextField()
-    date = fields.DatetimeField()
-    location = fields.CharField(max_length=255)
-    image_url = fields.CharField(max_length=255, null=True)
-    capacity = fields.IntField(default=0)
+class Events(BaseModel):
+    event_id = fields.IntField(pk=True)
     club = fields.ForeignKeyField('models.Clubs', related_name='events')
-    created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
+    title = fields.CharField(max_length=150)
+    description = fields.TextField(null=True)
+    image_url = fields.CharField(max_length=255, null=True)
+    event_date = fields.DatetimeField()
+    end_time = fields.DatetimeField(null=True)
+    location = fields.CharField(max_length=255, null=True)
+    quota = fields.IntField(default=0)
+    
+    created_by = fields.ForeignKeyField('models.Users', related_name='created_events', on_delete=fields.SET_NULL, null=True)
 
     class Meta:
         table = "events"
 
-class EventParticipation(models.Model):
-    id = fields.IntField(pk=True)
-    user = fields.ForeignKeyField('models.Users', related_name='event_participations')
+class EventParticipation(BaseModel):
+    participation_id = fields.IntField(pk=True)
     event = fields.ForeignKeyField('models.Events', related_name='participants')
+    user = fields.ForeignKeyField('models.Users', related_name='participated_events')
     status = fields.CharEnumField(ParticipationStatus, default=ParticipationStatus.GOING)
-    created_at = fields.DatetimeField(auto_now_add=True)
-
+    
     class Meta:
-        table = "event_participation"
-        unique_together = ("user", "event")
+        table = "event_participants"
+        unique_together = ("event", "user")
 
-class EventComments(models.Model):
-    id = fields.IntField(pk=True)
-    user = fields.ForeignKeyField('models.Users', related_name='comments')
+class EventComments(BaseModel):
+    comment_id = fields.IntField(pk=True)
     event = fields.ForeignKeyField('models.Events', related_name='comments')
+    user = fields.ForeignKeyField('models.Users', related_name='comments')
     content = fields.TextField()
-    created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "event_comments"
 
-# NEW MODEL for Event Reactions (likes/dislikes)
-class EventReactions(models.Model):
-    id = fields.IntField(pk=True)
-    user = fields.ForeignKeyField('models.Users', related_name='reactions')
-    event = fields.ForeignKeyField('models.Events', related_name='reactions')
-    is_like = fields.BooleanField()  # True = like, False = dislike
-    created_at = fields.DatetimeField(auto_now_add=True)
-
-    class Meta:
-        table = "event_reactions"
-        unique_together = ("user", "event")
-
-class Notifications(models.Model):
-    id = fields.IntField(pk=True)
-    user = fields.ForeignKeyField('models.Users', related_name='user_notifications')
+class Notifications(BaseModel):
+    notification_id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField('models.Users', related_name='notifications')
+    club = fields.ForeignKeyField('models.Clubs', related_name='club_notifications', null=True)
+    event = fields.ForeignKeyField('models.Events', related_name='event_notifications', null=True)
     message = fields.CharField(max_length=255)
     is_read = fields.BooleanField(default=False)
-    created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "notifications"
