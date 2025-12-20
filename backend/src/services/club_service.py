@@ -6,10 +6,8 @@ class ClubService:
 
     @staticmethod
     async def create_club(user_ctx, data):
-        # YENİ MANTIK: Rol kontrolünü kaldırdık.
         # Admin oluşturursa -> ACTIVE
         # Öğrenci oluşturursa -> PENDING (Onay Bekliyor)
-        
         status = "active" if user_ctx["role"] == UserRole.ADMIN else "pending"
 
         try:
@@ -19,7 +17,7 @@ class ClubService:
                 logo_url=data.get("image_url"),
                 president_id=user_ctx["sub"],
                 created_by_id=user_ctx["sub"],
-                status=status  # <-- Status eklendi
+                status=status
             )
             
             msg = "Club created successfully" if status == "active" else "Club application submitted for approval"
@@ -28,7 +26,6 @@ class ClubService:
         except Exception as e:
             return {"error": str(e)}, 400
 
-    # --- YENİ METOD: KULÜP ONAYLAMA ---
     @staticmethod
     async def approve_club(user_ctx, club_id: int):
         # Sadece Admin onaylayabilir
@@ -48,11 +45,6 @@ class ClubService:
         except DoesNotExist:
             return {"error": "Club not found"}, 404
 
-    # ... Diğer metodlar (delete_club, get_all_clubs vb.) AYNI KALACAK ...
-    # Ancak get_all_clubs içinde sadece 'active' olanları getirmek isteyebilirsiniz
-    # Şimdilik hepsini getiriyoruz ki admin bekleyenleri de görsün.
-    # Frontend tarafında filtreleme yapılabilir veya buraya parametre eklenebilir.
-    
     @staticmethod
     async def delete_club(user_ctx, club_id: int):
         if user_ctx["role"] != UserRole.ADMIN:
@@ -68,8 +60,8 @@ class ClubService:
 
     @staticmethod
     async def get_all_clubs():
-        # Sadece silinmemişleri getir
-        clubs = await Clubs.filter(is_deleted=False).all()
+        # Sadece silinmemiş VE statüsü 'active' olanları getir
+        clubs = await Clubs.filter(is_deleted=False, status="active").all()
         
         clubs_list = []
         for club in clubs:
@@ -78,7 +70,7 @@ class ClubService:
                 "name": club.club_name,
                 "description": club.description,
                 "image_url": club.logo_url,
-                "status": club.status, # Durumu da frontend görsün
+                "status": club.status,
                 "created_at": str(club.created_at)
             })
         

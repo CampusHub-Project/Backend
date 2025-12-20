@@ -2,16 +2,12 @@ from src.models import Events, Clubs, EventParticipation, ParticipationStatus, U
 from tortoise.exceptions import DoesNotExist
 from src.services.notification_service import NotificationService
 from datetime import datetime
-from tortoise.expressions import Q  # <--- BU IMPORT ÖNEMLİ
+from tortoise.expressions import Q
 
 class EventService:
 
-    # ... create_event, delete_event, get_event_detail AYNI KALACAK ...
-    # ... (Buraya önceki cevaptaki kodların aynısı gelecek) ...
-    
     @staticmethod
     async def create_event(user_ctx, data):
-        # (Önceki kodun aynısı - Değişiklik yok)
         club_id = data.get("club_id")
         club = await Clubs.get_or_none(club_id=club_id)
         if not club or club.is_deleted:
@@ -36,7 +32,6 @@ class EventService:
 
     @staticmethod
     async def delete_event(user_ctx, event_id: int):
-        # (Önceki kodun aynısı - Değişiklik yok)
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
             is_admin = user_ctx["role"] == UserRole.ADMIN
@@ -54,7 +49,6 @@ class EventService:
 
     @staticmethod
     async def get_event_detail(event_id: int):
-        # (Önceki kodun aynısı - Değişiklik yok)
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
             if event.is_deleted: return {"error": "Event not found"}, 404
@@ -80,13 +74,12 @@ class EventService:
         except DoesNotExist:
             return {"error": "Event not found"}, 404
 
-    # --- GÜNCELLENEN KISIM: PAGINATION & SEARCH ---
     @staticmethod
     async def get_events(page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
         """Filtreli ve Sayfalı Etkinlik Listesi"""
         
-        # 1. Temel Sorgu: Silinmemiş etkinlikler
-        query = Events.filter(is_deleted=False)
+        # 1. Temel Sorgu: Silinmemiş etkinlikler VE Onaylı Kulüpler
+        query = Events.filter(is_deleted=False, club__status="active")
 
         # 2. Arama Filtresi (Başlık VEYA Açıklamada ara)
         if search:
@@ -126,7 +119,6 @@ class EventService:
             }
         }, 200
 
-    # ... join_event, leave_event, remove_participant AYNI KALACAK ...
     @staticmethod
     async def join_event(user_ctx, event_id: int):
         try:
