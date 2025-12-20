@@ -3,6 +3,7 @@ from tortoise import Tortoise
 from src.config import DB_URL
 from src.models import Users, Clubs, Events, UserRole
 from src.security import hash_password
+from datetime import datetime, timedelta
 
 async def seed_data():
     print("🌱 Veritabanı bağlantısı kuruluyor...")
@@ -10,7 +11,6 @@ async def seed_data():
         db_url=DB_URL,
         modules={'models': ['src.models']}
     )
-    # Şemayı oluştur (Eski tabloları silip yenisini kurar)
     await Tortoise.generate_schemas()
 
     print("🗑️  Tablolar temizleniyor...")
@@ -18,9 +18,9 @@ async def seed_data():
     await Clubs.all().delete()
     await Users.all().delete()
 
-    print("👤 Kullanıcılar (Öğrenci No ile) oluşturuluyor...")
+    print("👤 Kullanıcılar oluşturuluyor...")
     
-    # 1. Sistem Yöneticisi (ID: 1000)
+    # 1. Admin (ID: 1000)
     admin = await Users.create(
         user_id=1000, 
         email="admin@campus.hub",
@@ -28,64 +28,93 @@ async def seed_data():
         first_name="Sistem",
         last_name="Yöneticisi",
         role=UserRole.ADMIN,
-        department="Bilgi İşlem"
+        department="IT"
     )
 
-    # 2. Kulüp Başkanı (ID: 20201001)
-    club_admin = await Users.create(
-        user_id=20201001, 
+    # 2. Kulüp Başkanı (ID: 2001)
+    president = await Users.create(
+        user_id=2001, 
         email="baskan@teknoloji.kulubu",
         password=hash_password("123456"),
         first_name="Can",
         last_name="Tekno",
         role=UserRole.CLUB_ADMIN,
-        department="Bilgisayar Mühendisliği"
+        department="Bilgisayar Müh."
     )
 
-    # 3. Öğrenci (ID: 20232005)
+    # 3. Öğrenci (ID: 3001)
     student = await Users.create(
-        user_id=20232005, 
+        user_id=3001, 
         email="ogrenci@univ.edu",
         password=hash_password("123456"),
-        first_name="Ahmet",
-        last_name="Çalışkan",
+        first_name="Ali",
+        last_name="Öğrenci",
         role=UserRole.STUDENT,
-        department="Endüstri Mühendisliği"
+        department="Endüstri Müh."
     )
 
     print("🏰 Kulüpler oluşturuluyor...")
+    
+    # Aktif Kulüp
     tech_club = await Clubs.create(
         club_name="Teknoloji Kulübü",
-        description="Yazılım, donanım ve yapay zeka tutkunlarının buluşma noktası.",
-        logo_url="https://images.unsplash.com/photo-1519389950473-47ba0277781c",
-        president=club_admin,
-        created_by=admin
+        description="Yazılım ve Donanım.",
+        logo_url="https://via.placeholder.com/150",
+        president=president,
+        created_by=admin,
+        status="active"
     )
 
-    art_club = await Clubs.create(
-        club_name="Sanat ve Tasarım Kulübü",
-        description="Resim, müzik ve dijital sanatlarla ilgilenenler buraya!",
-        logo_url="https://images.unsplash.com/photo-1513364776144-60967b0f800f",
-        president=admin,
-        created_by=admin
+    # Onay Bekleyen Kulüp (Test için)
+    chess_club = await Clubs.create(
+        club_name="Satranç Kulübü",
+        description="Zeka oyunları.",
+        logo_url="https://via.placeholder.com/150",
+        president=student, # Öğrenci başvurdu varsayalım
+        created_by=student,
+        status="pending"
     )
 
-    print("📅 Etkinlikler oluşturuluyor...")
+    print("📅 Etkinlikler oluşturuluyor (Pagination Testi İçin)...")
+    
+    # 1. Büyük Hackathon (Arama testi için spesifik isim)
     await Events.create(
-        title="Büyük Hackathon 2024",
-        description="48 saat sürecek kodlama maratonuna hazır mısın?",
-        event_date="2025-05-20T09:00:00",
-        location="Mühendislik Fakültesi - B Blok",
+        title="Büyük Hackathon 2025",
+        description="48 saatlik kodlama maratonu.",
+        event_date=datetime.now() + timedelta(days=30),
+        location="Ana Kampüs",
         quota=100,
         club=tech_club,
-        image_url="https://images.unsplash.com/photo-1504384308090-c54be3855833",
-        created_by=club_admin
+        created_by=president
     )
 
-    print("✅ VERİLER BAŞARIYLA YÜKLENDİ! 🚀")
-    print(f"👉 Admin: admin@campus.hub (Pass: 123456)")
-    print(f"👉 Kulüp Başkanı: baskan@teknoloji.kulubu")
-    print(f"👉 Öğrenci: ogrenci@univ.edu")
+    # 2. Python Workshop (Arama testi için)
+    await Events.create(
+        title="Python ile Veri Analizi",
+        description="Pandas ve NumPy eğitimi.",
+        event_date=datetime.now() + timedelta(days=10),
+        location="Online",
+        quota=50,
+        club=tech_club,
+        created_by=president
+    )
+
+    # 3. Pagination testi için 25 adet döngüsel etkinlik
+    for i in range(1, 26):
+        await Events.create(
+            title=f"Haftalık Toplantı #{i}",
+            description=f"Teknoloji kulübü haftalık olağan toplantısı {i}.",
+            event_date=datetime.now() + timedelta(days=i),
+            location="B-Blok Z06",
+            quota=20,
+            club=tech_club,
+            created_by=president
+        )
+
+    print("✅ VERİLER YÜKLENDİ!")
+    print(f"👉 Admin: admin@campus.hub (123456)")
+    print(f"👉 Öğrenci: ogrenci@univ.edu (123456)")
+    print(f"👉 Onaylanacak Kulüp ID: {chess_club.club_id} (Satranç)")
     
     await Tortoise.close_connections()
 
