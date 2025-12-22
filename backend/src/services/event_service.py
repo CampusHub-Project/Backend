@@ -4,6 +4,7 @@ from tortoise.exceptions import DoesNotExist
 from src.services.notification_service import NotificationService
 from datetime import datetime
 from tortoise.expressions import Q
+from src.config import logger # <--- Logger
 
 class EventService:
 
@@ -15,6 +16,7 @@ class EventService:
             return {"error": "Club not found"}, 404
 
         if user_ctx["role"] != UserRole.ADMIN and club.president_id != user_ctx["sub"]:
+            logger.warning(f"Unauthorized Event Creation Attempt by {user_ctx['sub']} for Club {club_id}")
             return {"error": "Unauthorized."}, 403
 
         event = await Events.create(
@@ -27,6 +29,8 @@ class EventService:
             image_url=data.get("image_url"),
             created_by_id=user_ctx["sub"]
         )
+        
+        logger.info(f"Event Created: '{event.title}' (ID: {event.event_id}) for Club '{club.club_name}'")
 
         await NotificationService.notify_followers(club.club_id, club.club_name, event.title)
         return {"message": "Event created", "event_id": event.event_id}, 201
@@ -38,12 +42,13 @@ class EventService:
             is_admin = user_ctx["role"] == UserRole.ADMIN
             is_president = event.club.president_id == user_ctx["sub"]
             
-            if not (is_admin or is_president):
-                return {"error": "Unauthorized"}, 403
+            if not (is_admin or is_president): return {"error": "Unauthorized"}, 403
 
             event.is_deleted = True
             event.deleted_at = datetime.utcnow()
             await event.save()
+            
+            logger.info(f"Event Deleted: {event.title} (ID: {event_id}) by {user_ctx['sub']}")
             return {"message": "Event deleted"}, 200
         except DoesNotExist:
             return {"error": "Event not found"}, 404
@@ -75,22 +80,14 @@ class EventService:
         except DoesNotExist:
             return {"error": "Event not found"}, 404
 
-    # --- REDIS VE FİLTRELEME GÜNCELLEMESİ ---
     @staticmethod
     async def get_events(redis, page: int = 1, limit: int = 20, search: str = None, date_filter: str = None):
-        """Redis Cache Destekli Etkinlik Listesi"""
-        
-        # 1. Cache Anahtarı
         cache_key = f"events:page:{page}:lim:{limit}:s:{search}:d:{date_filter}"
         
-        # 2. Redis Kontrolü
         if redis:
             cached_data = await redis.get(cache_key)
-            if cached_data:
-                return json.loads(cached_data), 200
+            if cached_data: return json.loads(cached_data), 200
 
-        # 3. Veritabanı Sorgusu (Cache yoksa)
-        # Sadece silinmemiş VE onaylı (active) kulüpler
         query = Events.filter(is_deleted=False, club__status="active")
 
         if search:
@@ -104,18 +101,16 @@ class EventService:
         offset = (page - 1) * limit
         events = await query.prefetch_related("club").order_by("event_date").offset(offset).limit(limit)
         
-        result_list = []
-        for e in events:
-            result_list.append({
-                "id": e.event_id,
-                "title": e.title,
-                "description": e.description,
-                "date": str(e.event_date),
-                "club_name": e.club.club_name if e.club else "Unknown",
-                "location": e.location,
-                "image_url": e.image_url,
-                "capacity": e.quota
-            })
+        result_list = [{
+            "id": e.event_id,
+            "title": e.title,
+            "description": e.description,
+            "date": str(e.event_date),
+            "club_name": e.club.club_name if e.club else "Unknown",
+            "location": e.location,
+            "image_url": e.image_url,
+            "capacity": e.quota
+        } for e in events]
             
         response_data = {
             "events": result_list,
@@ -127,9 +122,7 @@ class EventService:
             }
         }
 
-        # 4. Redis'e Kaydet (60 Saniye)
-        if redis:
-            await redis.set(cache_key, json.dumps(response_data), ex=60)
+        if redis: await redis.set(cache_key, json.dumps(response_data), ex=60)
 
         return response_data, 200
 
@@ -141,11 +134,11 @@ class EventService:
             
             current_count = await EventParticipation.filter(event_id=event_id, status=ParticipationStatus.GOING).count()
             if event.quota > 0 and current_count >= event.quota:
+                logger.info(f"Join failed (Full): Event {event_id}, User {user_ctx['sub']}")
                 return {"error": "Event is full"}, 400
 
             exists = await EventParticipation.filter(user_id=user_ctx["sub"], event_id=event_id).exists()
-            if exists:
-                return {"message": "Already joined"}, 400
+            if exists: return {"message": "Already joined"}, 400
 
             await EventParticipation.create(
                 user_id=user_ctx["sub"],
@@ -170,12 +163,12 @@ class EventService:
             is_admin = user_ctx["role"] == UserRole.ADMIN
             is_president = event.club.president_id == user_ctx["sub"]
             
-            if not (is_admin or is_president):
-                return {"error": "Unauthorized"}, 403
+            if not (is_admin or is_president): return {"error": "Unauthorized"}, 403
 
             deleted_count = await EventParticipation.filter(user_id=target_user_id, event_id=event_id).delete()
-            if deleted_count == 0:
-                return {"error": "User is not a participant"}, 404
+            if deleted_count == 0: return {"error": "User is not a participant"}, 404
+            
+            logger.info(f"Participant {target_user_id} removed from Event {event_id} by {user_ctx['sub']}")
             return {"message": "Participant removed"}, 200
         except DoesNotExist:
             return {"error": "Event not found"}, 404
