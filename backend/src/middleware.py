@@ -1,7 +1,8 @@
 from functools import wraps
 from sanic.response import json
 from src.security import decode_access_token
-from src.config import logger  # <--- Logger'ı dahil ettik
+from src.models import UserRole
+from src.config import logger
 
 def authorized():
     def decorator(f):
@@ -23,9 +24,26 @@ def authorized():
                 payload["sub"] = int(payload["sub"])
             
             request.ctx.user = payload
-            # Başarılı isteklerde detay seviyesini artırmak istersen burayı açabilirsin:
-            # logger.info(f"User {payload['sub']} accessing {request.path}")
+            return await f(request, *args, **kwargs)
+        return decorated_function
+    return decorator
+
+def admin_only():
+    """
+    Sadece 'authorized' ile birlikte kullanılır.
+    Kullanıcının rolünün 'admin' olup olmadığını kontrol eder.
+    """
+    def decorator(f):
+        @wraps(f)
+        async def decorated_function(request, *args, **kwargs):
+            # Önce authorized çalıştığı için request.ctx.user dolu olmalı
+            if not hasattr(request.ctx, "user"):
+                return json({"error": "Auth required first"}, 401)
             
+            if request.ctx.user.get("role") != UserRole.ADMIN:
+                logger.warning(f"Forbidden Access: User {request.ctx.user.get('sub')} tried to access Admin area.")
+                return json({"error": "Admin privileges required"}, 403)
+                
             return await f(request, *args, **kwargs)
         return decorated_function
     return decorator

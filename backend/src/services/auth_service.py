@@ -1,7 +1,7 @@
 from src.models import Users, UserRole
 from src.security import hash_password, verify_password, create_access_token
 from tortoise.exceptions import DoesNotExist
-from src.config import logger # <--- Logger
+from src.config import logger
 
 class AuthService:
     
@@ -67,6 +67,12 @@ class AuthService:
             logger.warning(f"Login failed: Email not found - {email}")
             return {"error": "Invalid credentials"}, 401
             
+        # --- EKLENEN KISIM: Silinmiş kullanıcı kontrolü ---
+        if user.is_deleted:
+            logger.warning(f"Login failed: Banned/Deleted User - {email}")
+            return {"error": "Account is disabled. Please contact admin."}, 403
+        # --------------------------------------------------
+
         if not verify_password(data.get("password"), user.password):
             logger.warning(f"Login failed: Wrong password - {email}")
             return {"error": "Invalid credentials"}, 401

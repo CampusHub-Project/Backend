@@ -2,13 +2,14 @@ from sanic import Sanic
 from sanic.response import json
 from sanic_ext import Extend
 from src.database import init_db, close_db
-from src.config import REDIS_URL, logger # <--- Logger
+from src.config import REDIS_URL, logger
 from src.routes.auth import auth_bp
 from src.routes.clubs import clubs_bp
 from src.routes.events import events_bp
 from src.routes.comments import comments_bp
 from src.routes.users import users_bp
 from src.routes.notifications import notif_bp
+from src.routes.admin import admin_bp  # <--- YENİ EKLENDİ
 from redis import asyncio as aioredis
 from sanic_limiter import Limiter, get_remote_address
 
@@ -28,6 +29,7 @@ app.blueprint(events_bp)
 app.blueprint(comments_bp)
 app.blueprint(users_bp)
 app.blueprint(notif_bp)
+app.blueprint(admin_bp) # <--- YENİ EKLENDİ
 
 Extend(app)
 
