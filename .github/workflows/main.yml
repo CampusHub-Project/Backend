@@ -1,36 +1,27 @@
 name: Backend CI/CD Pipeline
 
-# Tetikleyiciler: Hangi durumlarda çalışacak?
 on:
   push:
-    branches: 
-      - "main"      # Main'e kod geldiğinde (Merge sonrası)
-      - "develop"   # Develop'a kod atıldığında
-    paths:
-      - 'backend/**' # Sadece backend klasöründe değişiklik varsa
+    branches: ["main", "develop"]
+    paths: ['backend/**']
   pull_request:
-    branches: 
-      - "main"      # Develop'tan Main'e PR açıldığında
-    paths:
-      - 'backend/**'
+    branches: ["main"]
+    paths: ['backend/**']
 
 jobs:
-  # ---------------------------------------------------
-  # 1. TEST AŞAMASI (Hem Develop hem Main için çalışır)
-  # ---------------------------------------------------
   test:
     name: Run Tests & Lint
     runs-on: ubuntu-latest
     
-    # Testler için sanal MySQL ve Redis servisleri (Docker Compose'daki gibi)
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: rootpassword
-          MYSQL_DATABASE: campushub
-          MYSQL_USER: hubuser
-          MYSQL_PASSWORD: hubpass
+          # BURASI GÜNCELLENDİ: Şifreler GitHub Secrets'tan gelecek
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
         ports:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
@@ -65,43 +56,18 @@ jobs:
       - name: Lint with Flake8
         working-directory: ./backend
         run: |
-          # Kod yazım hatalarını kontrol et
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Run Tests
         working-directory: ./backend
         env:
-          # Config dosyasının okuyacağı ortam değişkenleri
-          # GitHub servisine localhost (127.0.0.1) üzerinden erişilir
-          DB_URL: mysql://hubuser:hubpass@127.0.0.1:3306/campushub
+          # BURASI GÜNCELLENDİ: DB_URL dinamik oluşturuluyor
+          # Not: GitHub Actions servislerinde host "127.0.0.1" olur (Docker Compose'daki gibi "db" değil)
+          DB_URL: mysql://${{ secrets.MYSQL_USER }}:${{ secrets.MYSQL_PASSWORD }}@127.0.0.1:3306/${{ secrets.MYSQL_DATABASE }}
           REDIS_URL: redis://127.0.0.1:6379
-          SECRET_KEY: test_secret_key_123
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
-          # Testleri çalıştır (Test dosyası yoksa hata vermemesi için '|| true' ekledim)
           pytest || echo "⚠️ Test dosyası bulunamadı, ancak kurulum başarılı."
 
-  # ---------------------------------------------------
-  # 2. BUILD AŞAMASI (Sadece Main Branch için çalışır)
-  # ---------------------------------------------------
-  build-docker:
-    needs: test  # Testler başarısız olursa buraya geçmez
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    # Bu işi SADECE 'main' branch'ine push yapıldığında çalıştır
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Build Docker Image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: false # Registry (Docker Hub vs) varsa true yapıp login adımları eklenmeli
-          tags: campushub-backend:latest
+  # ... (Build aşaması aynı kalabilir veya orada da secret kullanabilirsiniz)

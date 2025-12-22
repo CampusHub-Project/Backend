@@ -3,21 +3,28 @@ import logging
 import sys
 
 # --- LOGGING YAPILANDIRMASI ---
-# Logların formatı: Zaman [Seviye] İsim: Mesaj
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
-        logging.StreamHandler(sys.stdout) # Çıktıyı konsola (Docker loglarına) ver
+        logging.StreamHandler(sys.stdout)
     ]
 )
-# Uygulama genelinde kullanacağımız logger nesnesi
 logger = logging.getLogger("CampusHub")
 
-# --- DİĞER AYARLAR ---
-DB_URL = os.getenv("DB_URL", "mysql://hubuser:hubpass@localhost:3307/campushub")
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret")
+# --- DİĞER AYARLAR (GÜVENLİ HALİ) ---
+# Artık "default" değer olarak şifre yazmıyoruz.
+# Eğer .env okunamazsa program hata verip durmalı, yanlış şifreyle çalışmamalı.
+
+DB_URL = os.getenv("DB_URL")
+if not DB_URL:
+    raise ValueError("KRİTİK HATA: DB_URL ortam değişkeni bulunamadı! .env dosyasını kontrol edin.")
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379") # Redis localde şifresiz olabilir, bu kalabilir.
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("KRİTİK HATA: SECRET_KEY ayarlanmamış! Güvenlik için zorunludur.")
 
 TORTOISE_ORM = {
     "connections": {"default": DB_URL},
