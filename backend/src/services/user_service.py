@@ -43,6 +43,17 @@ class UserService:
             followed = await ClubFollowers.filter(user_id=user_id).prefetch_related("club")
             clubs = [{"id": f.club.club_id, "name": f.club.club_name} for f in followed if f.club]
             
+            # --- GÜNCELLEME: Kullanıcı Yorumları ---
+            user_comments = await EventComments.filter(user_id=user_id).prefetch_related("event").order_by("-created_at")
+            comments_list = [{
+                "id": c.comment_id,
+                "content": c.content,
+                "event_id": c.event.event_id if c.event else None,
+                "event_title": c.event.title if c.event else "Deleted Event",
+                "created_at": str(c.created_at)
+            } for c in user_comments]
+            # ---------------------------------------
+
             return {
                 "profile": {
                     "id": user.user_id,
@@ -56,7 +67,8 @@ class UserService:
                 },
                 "activities": {
                     "participated_events": participated_events,
-                    "followed_clubs": clubs
+                    "followed_clubs": clubs,
+                    "comments": comments_list # Yorumları ekledik
                 }
             }, 200
         except DoesNotExist:

@@ -37,8 +37,16 @@ async def list_events(request):
     return json(result, status=status)
 
 @events_bp.get("/<event_id:int>")
+@authorized() # User bilgisini almak için
 async def get_event_detail(request, event_id):
-    result, status = await EventService.get_event_detail(event_id)
+    user_ctx = getattr(request.ctx, "user", None)
+    result, status = await EventService.get_event_detail(event_id, user_ctx)
+    return json(result, status=status)
+
+@events_bp.put("/<event_id:int>")
+@authorized()
+async def update_event(request, event_id):
+    result, status = await EventService.update_event(request.ctx.user, event_id, request.json)
     return json(result, status=status)
 
 @events_bp.post("/<event_id:int>/join")

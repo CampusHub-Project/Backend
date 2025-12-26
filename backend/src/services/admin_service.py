@@ -1,6 +1,7 @@
 from src.models import Users, Clubs, Events, UserRole, EventComments, Notifications
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q # <--- Arama için Q nesnesini ekledik
+from tortoise.transactions import in_transaction # <-- BU IMPORT EKLENMELİ
 from src.config import logger
 
 class AdminService:
@@ -135,32 +136,72 @@ class AdminService:
 
     @staticmethod
     async def update_club_details(club_id: int, data: dict):
-        """D. Kulüp İçerik Müdahalesi: Kulüp bilgilerini zorla güncelle"""
+        """D. Kulüp İçerik Müdahalesi + Otomatik Başkan Rol Yönetimi"""
         try:
-            club = await Clubs.get(club_id=club_id)
-            
-            changes = []
-            if "name" in data:
-                club.club_name = data["name"]
-                changes.append("name")
-            if "description" in data:
-                club.description = data["description"]
-                changes.append("description")
-            if "image_url" in data:
-                club.logo_url = data["image_url"]
-                changes.append("image")
-            
-            # Eğer hiçbir şey gönderilmediyse
-            if not changes:
-                return {"message": "No changes detected"}, 200
+            # Transaction (Atomik İşlem) başlatıyoruz. Hata olursa her şeyi geri alır.
+            async with in_transaction():
+                club = await Clubs.get(club_id=club_id)
+                
+                changes = []
+                
+                # 1. Standart Bilgileri Güncelle
+                if "name" in data:
+                    club.club_name = data["name"]
+                    changes.append("name")
+                if "description" in data:
+                    club.description = data["description"]
+                    changes.append("description")
+                if "image_url" in data:
+                    club.logo_url = data["image_url"]
+                    changes.append("image")
+                
+                # 2. BAŞKAN DEĞİŞİKLİĞİ VAR MI? (Otomatik Rol Yönetimi)
+                if "president_id" in data:
+                    new_pid = int(data["president_id"])
+                    
+                    # Eğer başkan zaten aynıysa işlem yapma
+                    if club.president_id != new_pid:
+                        
+                        # A. Yeni Başkan Adayını Bul
+                        new_president = await Users.get_or_none(user_id=new_pid)
+                        if not new_president:
+                            return {"error": "New president user not found"}, 404
+                            
+                        # B. Eski Başkanı Bul ve Yetkisini Düşür (Eğer Admin Değilse)
+                        if club.president_id:
+                            old_president = await Users.get_or_none(user_id=club.president_id)
+                            # Eski başkan varsa ve rolü 'club_admin' ise -> 'student' yap
+                            # (Admin ise dokunma, sistem admini kulüp başkanı olmuş olabilir)
+                            if old_president and old_president.role == UserRole.CLUB_ADMIN:
+                                old_president.role = UserRole.STUDENT
+                                await old_president.save()
+                                logger.info(f"Auto-Downgrade: User {old_president.user_id} role changed to STUDENT")
 
-            await club.save()
-            logger.info(f"Club {club_id} updated by Admin. Fields: {changes}")
-            
-            return {"message": "Club updated successfully", "club": {
-                "id": club.club_id,
-                "name": club.club_name,
-                "description": club.description
-            }}, 200
+                        # C. Yeni Başkanı Yükselt (Eğer Admin Değilse)
+                        if new_president.role == UserRole.STUDENT:
+                            new_president.role = UserRole.CLUB_ADMIN
+                            await new_president.save()
+                            logger.info(f"Auto-Upgrade: User {new_president.user_id} role changed to CLUB_ADMIN")
+                        
+                        # D. Kulüp Kaydını Güncelle
+                        club.president_id = new_pid
+                        changes.append(f"president_id (changed from {club.president_id} to {new_pid})")
+
+                # Eğer hiçbir değişiklik yoksa
+                if not changes:
+                    return {"message": "No changes detected"}, 200
+
+                await club.save()
+                logger.info(f"Club {club_id} updated by Admin. Fields: {changes}")
+                
+                return {"message": "Club updated successfully", "club": {
+                    "id": club.club_id,
+                    "name": club.club_name,
+                    "president_id": club.president_id
+                }}, 200
+
         except DoesNotExist:
             return {"error": "Club not found"}, 404
+        except Exception as e:
+            logger.error(f"Update Club Error: {str(e)}")
+            return {"error": str(e)}, 500

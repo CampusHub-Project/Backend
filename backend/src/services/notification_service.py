@@ -27,7 +27,21 @@ class NotificationService:
     @staticmethod
     async def get_my_notifications(user_id: int):
         notifs = await Notifications.filter(user_id=user_id).order_by("-is_read", "-created_at")
-        return {"notifications": list(notifs)}, 200
+        # --- DÜZELTME BAŞLANGICI ---
+        # ORM objelerini JSON uyumlu listeye çeviriyoruz
+        result_list = []
+        for n in notifs:
+            result_list.append({
+                "id": n.notification_id,
+                "message": n.message,
+                "is_read": n.is_read,
+                "created_at": str(n.created_at), # Tarih objesini string'e çevir
+                "club_id": n.club_id if hasattr(n, "club_id") else None,
+                "event_id": n.event_id if hasattr(n, "event_id") else None
+            })
+        
+        return {"notifications": result_list}, 200
+        # --- DÜZELTME SONU ---
 
     @staticmethod
     async def mark_as_read(notif_id: int, user_id: int):

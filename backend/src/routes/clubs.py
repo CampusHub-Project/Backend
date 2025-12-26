@@ -40,8 +40,12 @@ async def list_clubs(request):
     return json(result, status=status)
 
 @clubs_bp.get("/<club_id:int>")
+@authorized() # authorized opsiyonel olabilir ama user bilgisini almak için ekledik, token yoksa hata verir.
 async def get_club(request, club_id):
-    result, status = await ClubService.get_club_details(club_id)
+    # Eğer authorized kullanmazsan request.ctx.user olmayabilir, try-except ile kontrol etmen gerekir.
+    # Şimdilik en temizi authorized kullanmak veya user_ctx'i opsiyonel geçmek.
+    user_ctx = getattr(request.ctx, "user", None)
+    result, status = await ClubService.get_club_details(club_id, user_ctx)
     return json(result, status=status)
 
 @clubs_bp.post("/<club_id:int>/follow")
