@@ -1,7 +1,6 @@
 from tortoise import fields, models
 from enum import Enum
 
-# --- ENUM Sınıfları (Tip güvenliği için) ---
 class UserRole(str, Enum):
     STUDENT = "student"
     CLUB_ADMIN = "club_admin"
@@ -11,7 +10,6 @@ class ParticipationStatus(str, Enum):
     GOING = "going"
     INTERESTED = "interested"
 
-# --- BASE MODEL (Ortak Özellikler) ---
 class BaseModel(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
@@ -21,10 +19,8 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-# --- TABLOLAR ---
 
 class Users(BaseModel):
-    # generated=False -> Veritabanı ID üretmez, biz Okul Numarasını ID olarak veririz.
     user_id = fields.BigIntField(pk=True, generated=False) 
     
     first_name = fields.CharField(max_length=50)

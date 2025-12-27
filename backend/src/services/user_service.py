@@ -28,7 +28,6 @@ class UserService:
         try:
             user = await Users.get(user_id=user_id)
             
-            # Katıldığı Etkinlikler
             participations = await EventParticipation.filter(user_id=user_id).prefetch_related("event", "event__club")
             participated_events = [
                 {
@@ -39,11 +38,9 @@ class UserService:
                 } for p in participations if p.event
             ]
             
-            # Takip Edilen Kulüpler
             followed = await ClubFollowers.filter(user_id=user_id).prefetch_related("club")
             clubs = [{"id": f.club.club_id, "name": f.club.club_name} for f in followed if f.club]
             
-            # --- GÜNCELLEME: Kullanıcı Yorumları ---
             user_comments = await EventComments.filter(user_id=user_id).prefetch_related("event").order_by("-created_at")
             comments_list = [{
                 "id": c.comment_id,
@@ -52,7 +49,6 @@ class UserService:
                 "event_title": c.event.title if c.event else "Deleted Event",
                 "created_at": str(c.created_at)
             } for c in user_comments]
-            # ---------------------------------------
 
             return {
                 "profile": {
@@ -68,7 +64,7 @@ class UserService:
                 "activities": {
                     "participated_events": participated_events,
                     "followed_clubs": clubs,
-                    "comments": comments_list # Yorumları ekledik
+                    "comments": comments_list
                 }
             }, 200
         except DoesNotExist:
@@ -79,7 +75,6 @@ class UserService:
         try:
             user = await Users.get(user_id=user_id)
             
-            # İsim güncelleme isteği gelirse ayır
             if "full_name" in data:
                 names = data["full_name"].strip().split(" ")
                 user.first_name = names[0]

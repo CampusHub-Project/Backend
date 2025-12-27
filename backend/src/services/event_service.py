@@ -4,7 +4,7 @@ from tortoise.exceptions import DoesNotExist
 from src.services.notification_service import NotificationService
 from datetime import datetime
 from tortoise.expressions import Q
-from src.config import logger # <--- Logger
+from src.config import logger 
 
 class EventService:
 
@@ -19,7 +19,6 @@ class EventService:
             logger.warning(f"Unauthorized Event Creation Attempt by {user_ctx['sub']} for Club {club_id}")
             return {"error": "Unauthorized."}, 403
 
-        # --- GÜNCELLEME: Kapasite Kontrolü ---
         capacity = data.get("capacity", 0)
         try:
             capacity = int(capacity)
@@ -28,7 +27,6 @@ class EventService:
             
         if capacity <= 0:
             return {"error": "Capacity must be greater than 0"}, 400
-        # -------------------------------------
 
         event = await Events.create(
             title=data.get("title"),
@@ -36,7 +34,7 @@ class EventService:
             event_date=data.get("date"),
             location=data.get("location"),
             quota=capacity,
-            club_id=club_id, # club_id yukarıdaki koddan geliyor
+            club_id=club_id,
             image_url=data.get("image_url"),
             created_by_id=user_ctx["sub"]
         )
@@ -65,7 +63,7 @@ class EventService:
             return {"error": "Event not found"}, 404
 
     @staticmethod
-    async def get_event_detail(event_id: int, user_ctx=None): # user_ctx eklendi
+    async def get_event_detail(event_id: int, user_ctx=None): 
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
             if event.is_deleted: return {"error": "Event not found"}, 404
@@ -74,7 +72,6 @@ class EventService:
                 event_id=event_id, status=ParticipationStatus.GOING
             ).count()
 
-            # --- GÜNCELLEME: Kullanıcı katılmış mı? ---
             is_joined = False
             if user_ctx:
                 is_joined = await EventParticipation.filter(
@@ -82,7 +79,6 @@ class EventService:
                     user_id=user_ctx["sub"], 
                     status=ParticipationStatus.GOING
                 ).exists()
-            # ------------------------------------------
             
             return {
                 "event": {
@@ -96,7 +92,7 @@ class EventService:
                     "club_name": event.club.club_name if event.club else "Unknown",
                     "club_id": event.club.club_id if event.club else None,
                     "participant_count": participant_count,
-                    "is_joined": is_joined # Frontend buna bakıp butonu değiştirecek
+                    "is_joined": is_joined
                 }
             }, 200
         except DoesNotExist:

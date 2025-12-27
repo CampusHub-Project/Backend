@@ -3,7 +3,7 @@ from sanic.response import json
 from src.services.comment_service import CommentService
 from src.middleware import authorized
 
-# URL yapısı: /events/<id>/comments şeklinde olacak
+
 comments_bp = Blueprint("comments", url_prefix="/events")
 
 @comments_bp.post("/<event_id:int>/comments")

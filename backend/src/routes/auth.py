@@ -3,12 +3,10 @@ from sanic.response import json
 from src.services.auth_service import AuthService
 from src.middleware import authorized
 
-# Blueprint tanımla (URL ön eki /auth olacak)
 auth_bp = Blueprint("auth", url_prefix="/auth")
 
 @auth_bp.post("/register")
 async def register(request):
-    # AuthService'i çağır
     result, status = await AuthService.register_user(request.json)
     return json(result, status=status)
 
@@ -18,7 +16,6 @@ async def login(request):
     return json(result, status=status)
 
 @auth_bp.get("/me")
-@authorized() # Bu endpoint korumalıdır
+@authorized()
 async def get_me(request):
-    # Middleware sayesinde request.ctx.user dolu geliyor
     return json({"user": request.ctx.user})

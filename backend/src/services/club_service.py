@@ -2,7 +2,7 @@ import json
 from src.models import Clubs, ClubFollowers, UserRole
 from tortoise.exceptions import DoesNotExist
 from datetime import datetime
-from src.config import logger # <--- Logger
+from src.config import logger
 
 class ClubService:
 
@@ -102,12 +102,11 @@ class ClubService:
         return response_data, 200
 
     @staticmethod
-    async def get_club_details(club_id: int, user_ctx=None): # user_ctx parametresi eklendi
+    async def get_club_details(club_id: int, user_ctx=None): 
         try:
-            club = await Clubs.get(club_id=club_id).prefetch_related("events") # events burada prefetch ediliyor
+            club = await Clubs.get(club_id=club_id).prefetch_related("events") 
             if club.is_deleted: return {"error": "Club not found"}, 404
 
-            # --- GÜNCELLEME BAŞLANGICI: Üye Listesi (Sadece Admin veya Başkan görebilir) ---
             followers_list = []
             is_authorized_viewer = False
             
@@ -117,14 +116,12 @@ class ClubService:
                 
                 if is_admin or is_president:
                     is_authorized_viewer = True
-                    # Takipçileri çek
                     followers = await ClubFollowers.filter(club_id=club_id).prefetch_related("user")
                     followers_list = [{
                         "user_id": f.user.user_id,
                         "full_name": f"{f.user.first_name} {f.user.last_name}",
                         "email": f.user.email
                     } for f in followers if f.user]
-            # --- GÜNCELLEME SONU ---
 
             events_list = [{
                 "id": e.event_id,
@@ -142,9 +139,9 @@ class ClubService:
                     "description": club.description,
                     "image_url": club.logo_url,
                     "status": club.status,
-                    "president_id": club.president_id, # Frontend kontrolü için
+                    "president_id": club.president_id, 
                     "events": events_list,
-                    "members": followers_list if is_authorized_viewer else [] # Yetkisi yoksa boş liste
+                    "members": followers_list if is_authorized_viewer else [] 
                 }
             }, 200
         except DoesNotExist:
@@ -152,10 +149,8 @@ class ClubService:
 
     @staticmethod
     async def follow_club(user_ctx, club_id: int):
-        # --- GÜNCELLEME: Admin kulübe katılamaz ---
         if user_ctx["role"] == UserRole.ADMIN:
              return {"error": "Admins cannot join clubs"}, 400
-        # ------------------------------------------
 
         try:
             club = await Clubs.get(club_id=club_id)

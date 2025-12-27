@@ -17,7 +17,6 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          # BURASI GÜNCELLENDİ: Şifreler GitHub Secrets'tan gelecek
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
           MYSQL_USER: ${{ secrets.MYSQL_USER }}
@@ -62,12 +61,8 @@ jobs:
       - name: Run Tests
         working-directory: ./backend
         env:
-          # BURASI GÜNCELLENDİ: DB_URL dinamik oluşturuluyor
-          # Not: GitHub Actions servislerinde host "127.0.0.1" olur (Docker Compose'daki gibi "db" değil)
           DB_URL: mysql://${{ secrets.MYSQL_USER }}:${{ secrets.MYSQL_PASSWORD }}@127.0.0.1:3306/${{ secrets.MYSQL_DATABASE }}
           REDIS_URL: redis://127.0.0.1:6379
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           pytest || echo "⚠️ Test dosyası bulunamadı, ancak kurulum başarılı."
-
-  # ... (Build aşaması aynı kalabilir veya orada da secret kullanabilirsiniz)

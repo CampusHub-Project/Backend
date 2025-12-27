@@ -6,8 +6,7 @@ async def init_db():
         db_url=DB_URL,
         modules={'models': ['src.models']}
     )
-    # This will create missing tables/columns
-    await Tortoise.generate_schemas(safe=True)  # safe=True prevents data loss
+    await Tortoise.generate_schemas(safe=True) 
 
 async def close_db():
     await Tortoise.close_connections()

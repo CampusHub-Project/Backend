@@ -17,7 +17,6 @@ async def delete_event(request, event_id):
     result, status = await EventService.delete_event(request.ctx.user, event_id)
     return json(result, status=status)
 
-# --- GÜNCELLENEN ROUTE (REDIS EKLENDİ) ---
 @events_bp.get("/")
 async def list_events(request):
     try:
@@ -30,14 +29,13 @@ async def list_events(request):
     search = request.args.get("search")
     date_filter = request.args.get("date")
 
-    # Redis bağlantısını servise gönderiyoruz
     redis = request.app.ctx.redis
     
     result, status = await EventService.get_events(redis, page, limit, search, date_filter)
     return json(result, status=status)
 
 @events_bp.get("/<event_id:int>")
-@authorized() # User bilgisini almak için
+@authorized()
 async def get_event_detail(request, event_id):
     user_ctx = getattr(request.ctx, "user", None)
     result, status = await EventService.get_event_detail(event_id, user_ctx)
