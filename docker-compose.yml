@@ -9,7 +9,6 @@ services:
     command: sanic src.server:app --host=0.0.0.0 --port=8000 --debug --auto-reload
     ports:
       - "8000:8000"
-    # BURASI DEĞİŞTİ: Artık şifreler burada açıkça yazmıyor
     environment:
       - DB_URL=${DB_URL}
       - REDIS_URL=${REDIS_URL}
@@ -24,7 +23,6 @@ services:
   db:
     image: mysql:8.0
     container_name: campushub_db
-    # BURASI DEĞİŞTİ: Şifreleri .env'den çekecek
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}

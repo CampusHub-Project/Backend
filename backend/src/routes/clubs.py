@@ -8,31 +8,24 @@ clubs_bp = Blueprint("clubs", url_prefix="/clubs")
 @clubs_bp.post("/")
 @authorized()
 async def create_club(request):
-    # Redis bağlantısını al
     redis = request.app.ctx.redis
-    # Servise gönder (Cache temizleme için gerekli)
     result, status = await ClubService.create_club(request.ctx.user, request.json, redis)
     return json(result, status=status)
 
 @clubs_bp.post("/<club_id:int>/approve")
 @authorized()
 async def approve_club(request, club_id):
-    # Redis bağlantısını al
     redis = request.app.ctx.redis
-    # Servise gönder
     result, status = await ClubService.approve_club(request.ctx.user, club_id, redis)
     return json(result, status=status)
 
 @clubs_bp.delete("/<club_id:int>")
 @authorized()
 async def delete_club(request, club_id):
-    # Redis bağlantısını al
     redis = request.app.ctx.redis
-    # Servise gönder
     result, status = await ClubService.delete_club(request.ctx.user, club_id, redis)
     return json(result, status=status)
 
-# --- GET İşlemleri (Redis zaten vardı ama kontrol edelim) ---
 @clubs_bp.get("/")
 async def list_clubs(request):
     redis = request.app.ctx.redis
@@ -40,10 +33,8 @@ async def list_clubs(request):
     return json(result, status=status)
 
 @clubs_bp.get("/<club_id:int>")
-@authorized() # authorized opsiyonel olabilir ama user bilgisini almak için ekledik, token yoksa hata verir.
+@authorized()
 async def get_club(request, club_id):
-    # Eğer authorized kullanmazsan request.ctx.user olmayabilir, try-except ile kontrol etmen gerekir.
-    # Şimdilik en temizi authorized kullanmak veya user_ctx'i opsiyonel geçmek.
     user_ctx = getattr(request.ctx, "user", None)
     result, status = await ClubService.get_club_details(club_id, user_ctx)
     return json(result, status=status)

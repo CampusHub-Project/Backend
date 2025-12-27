@@ -36,7 +36,6 @@ def admin_only():
     def decorator(f):
         @wraps(f)
         async def decorated_function(request, *args, **kwargs):
-            # Önce authorized çalıştığı için request.ctx.user dolu olmalı
             if not hasattr(request.ctx, "user"):
                 return json({"error": "Auth required first"}, 401)
             

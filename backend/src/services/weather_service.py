@@ -14,17 +14,13 @@ class WeatherService:
                 logger.info(f"Weather fetched from Cache for {city}")
                 return json.loads(cached_data), 200
 
-        # --- GÜNCELLEME: Header Eklendi ---
-        # API'ye "Ben bir tarayıcı değilim ama güvenli bir öğrenci projesiyim" diyoruz.
         headers = {
             "User-Agent": "CampusHub-Project/1.0 (Student Project; contact@example.com)"
         }
 
         try:
-            # trust_env=True: Proxy/VPN kullanıyorsan sistem ayarlarını kullanmasını sağlar
             async with aiohttp.ClientSession(trust_env=True) as session:
                 
-                # 2. ADIM: Geocoding
                 geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=tr&format=json"
                 
                 async with session.get(geo_url, headers=headers) as geo_resp:
@@ -41,7 +37,6 @@ class WeatherService:
                     lon = geo_data["results"][0]["longitude"]
                     city_name = geo_data["results"][0]["name"]
 
-                # 3. ADIM: Weather
                 weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
                 
                 async with session.get(weather_url, headers=headers) as weather_resp:
