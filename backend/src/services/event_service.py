@@ -19,13 +19,24 @@ class EventService:
             logger.warning(f"Unauthorized Event Creation Attempt by {user_ctx['sub']} for Club {club_id}")
             return {"error": "Unauthorized."}, 403
 
+        # --- GÜNCELLEME: Kapasite Kontrolü ---
+        capacity = data.get("capacity", 0)
+        try:
+            capacity = int(capacity)
+        except:
+            return {"error": "Capacity must be a number"}, 400
+            
+        if capacity <= 0:
+            return {"error": "Capacity must be greater than 0"}, 400
+        # -------------------------------------
+
         event = await Events.create(
             title=data.get("title"),
             description=data.get("description"),
             event_date=data.get("date"),
             location=data.get("location"),
-            quota=data.get("capacity", 0),
-            club_id=club_id,
+            quota=capacity,
+            club_id=club_id, # club_id yukarıdaki koddan geliyor
             image_url=data.get("image_url"),
             created_by_id=user_ctx["sub"]
         )
@@ -54,7 +65,7 @@ class EventService:
             return {"error": "Event not found"}, 404
 
     @staticmethod
-    async def get_event_detail(event_id: int):
+    async def get_event_detail(event_id: int, user_ctx=None): # user_ctx eklendi
         try:
             event = await Events.get(event_id=event_id).prefetch_related("club")
             if event.is_deleted: return {"error": "Event not found"}, 404
@@ -62,6 +73,16 @@ class EventService:
             participant_count = await EventParticipation.filter(
                 event_id=event_id, status=ParticipationStatus.GOING
             ).count()
+
+            # --- GÜNCELLEME: Kullanıcı katılmış mı? ---
+            is_joined = False
+            if user_ctx:
+                is_joined = await EventParticipation.filter(
+                    event_id=event_id, 
+                    user_id=user_ctx["sub"], 
+                    status=ParticipationStatus.GOING
+                ).exists()
+            # ------------------------------------------
             
             return {
                 "event": {
@@ -74,9 +95,34 @@ class EventService:
                     "image_url": event.image_url,
                     "club_name": event.club.club_name if event.club else "Unknown",
                     "club_id": event.club.club_id if event.club else None,
-                    "participant_count": participant_count
+                    "participant_count": participant_count,
+                    "is_joined": is_joined # Frontend buna bakıp butonu değiştirecek
                 }
             }, 200
+        except DoesNotExist:
+            return {"error": "Event not found"}, 404
+
+    @staticmethod
+    async def update_event(user_ctx, event_id: int, data: dict):
+        try:
+            event = await Events.get(event_id=event_id).prefetch_related("club")
+            
+            is_admin = user_ctx["role"] == UserRole.ADMIN
+            is_president = event.club.president_id == user_ctx["sub"]
+
+            if not (is_admin or is_president):
+                return {"error": "Unauthorized"}, 403
+
+            if "title" in data: event.title = data["title"]
+            if "description" in data: event.description = data["description"]
+            if "date" in data: event.event_date = data["date"]
+            if "location" in data: event.location = data["location"]
+            if "capacity" in data: 
+                cap = int(data["capacity"])
+                if cap > 0: event.quota = cap
+
+            await event.save()
+            return {"message": "Event updated successfully"}, 200
         except DoesNotExist:
             return {"error": "Event not found"}, 404
 
